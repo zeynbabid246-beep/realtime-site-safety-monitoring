@@ -1,0 +1,13 @@
+ultralytics
+cvzone
+opencv-python
+telegram
+requests
+cryptography
+python-dotenv
+pytest
+fastapi
+uvicorn
+python-multipart
+shapely
+scikit-learn

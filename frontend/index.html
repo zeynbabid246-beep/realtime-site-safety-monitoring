@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Construction Safety AI
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+</head>
+
+<body>
+
+    <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
+    <header class="header">
+
+        <div>
+            <h1>
+                🏗️ Construction Safety AI
+            </h1>
+
+            <p>
+                Real-time PPE & Fire/Smoke Detection
+            </p>
+        </div>
+
+        <div
+            id="connectionStatus"
+            class="status disconnected"
+        >
+            ● Disconnected
+        </div>
+
+    </header>
+
+
+    <!-- =====================================================
+         MAIN
+    ====================================================== -->
+
+    <main class="container">
+
+        <!-- =================================================
+             CAMERA SECTION
+        ================================================== -->
+
+        <section class="camera-section">
+
+            <div class="section-header">
+
+                <h2>
+                    Live Camera
+                </h2>
+
+                <div class="controls">
+
+                    <button
+                        id="startButton"
+                        class="btn start"
+                    >
+                        ▶ Start Camera
+                    </button>
+
+                    <button
+                        id="stopButton"
+                        class="btn stop"
+                        disabled
+                    >
+                        ■ Stop Camera
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- Camera / Detection -->
+
+            <div class="camera-container">
+
+                <!-- Original webcam -->
+
+                <video
+                    id="camera"
+                    autoplay
+                    playsinline
+                    muted
+                >
+                </video>
+
+
+                <!-- Detection result -->
+
+                <canvas
+                    id="resultCanvas"
+                >
+                </canvas>
+
+            </div>
+
+
+            <p
+                id="cameraMessage"
+                class="camera-message"
+            >
+                Click "Start Camera" to begin detection.
+            </p>
+
+        </section>
+
+
+        <!-- =================================================
+             DETECTION STATUS
+        ================================================== -->
+
+        <section class="detections-section">
+
+            <h2>
+                Detection Status
+            </h2>
+
+
+            <div class="cards">
+
+
+                <!-- PPE -->
+
+                <div class="card">
+
+                    <div class="card-icon">
+                        🦺
+                    </div>
+
+                    <div class="card-content">
+
+                        <h3>
+                            PPE
+                        </h3>
+
+                        <p id="ppeStatus">
+                            Waiting...
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <!-- FIRE -->
+
+                <div class="card">
+
+                    <div class="card-icon">
+                        🔥
+                    </div>
+
+                    <div class="card-content">
+
+                        <h3>
+                            Fire
+                        </h3>
+
+                        <p id="fireStatus">
+                            Waiting...
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <!-- SMOKE -->
+
+                <div class="card">
+
+                    <div class="card-icon">
+                        💨
+                    </div>
+
+                    <div class="card-content">
+
+                        <h3>
+                            Smoke
+                        </h3>
+
+                        <p id="smokeStatus">
+                            Waiting...
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <!-- PEOPLE -->
+
+                <div class="card">
+
+                    <div class="card-icon">
+                        👷
+                    </div>
+
+                    <div class="card-content">
+
+                        <h3>
+                            People
+                        </h3>
+
+                        <p id="personStatus">
+                            Waiting...
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             DETECTION DETAILS
+        ================================================== -->
+
+        <section class="details-section">
+
+            <h2>
+                Current Detections
+            </h2>
+
+            <div
+                id="detectionList"
+                class="detection-list"
+            >
+
+                <p class="empty">
+                    No detections yet.
+                </p>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- =====================================================
+         JAVASCRIPT
+    ====================================================== -->
+
+    <script
+        src="app.js"
+    >
+    </script>
+
+</body>
+
+</html>

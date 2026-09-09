@@ -1,0 +1,397 @@
+/* =========================================================
+   GLOBAL
+========================================================= */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+
+    background: #f4f6f8;
+
+    color: #1f2937;
+
+    min-height: 100vh;
+}
+
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.header {
+
+    background: #111827;
+
+    color: white;
+
+    padding: 20px 40px;
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+
+    gap: 20px;
+}
+
+
+.header h1 {
+
+    font-size: 26px;
+
+    margin-bottom: 5px;
+}
+
+
+.header p {
+
+    color: #9ca3af;
+
+    font-size: 14px;
+}
+
+
+/* =========================================================
+   CONNECTION STATUS
+========================================================= */
+
+.status {
+
+    padding: 10px 16px;
+
+    border-radius: 20px;
+
+    font-size: 14px;
+
+    font-weight: bold;
+}
+
+
+.status.connected {
+
+    background: #064e3b;
+
+    color: #6ee7b7;
+}
+
+
+.status.disconnected {
+
+    background: #450a0a;
+
+    color: #fca5a5;
+}
+
+
+/* =========================================================
+   MAIN CONTAINER
+========================================================= */
+
+.container {
+
+    max-width: 1200px;
+
+    margin: 30px auto;
+
+    padding: 0 20px;
+}
+
+
+/* =========================================================
+   SECTIONS
+========================================================= */
+
+.camera-section,
+.detections-section,
+.details-section {
+
+    background: white;
+
+    border-radius: 12px;
+
+    padding: 25px;
+
+    margin-bottom: 25px;
+
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+
+.section-header {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+
+    margin-bottom: 20px;
+
+    gap: 20px;
+}
+
+
+h2 {
+
+    font-size: 21px;
+
+    margin-bottom: 20px;
+}
+
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+.controls {
+
+    display: flex;
+
+    gap: 10px;
+}
+
+
+.btn {
+
+    border: none;
+
+    padding: 11px 18px;
+
+    border-radius: 7px;
+
+    font-size: 14px;
+
+    font-weight: bold;
+
+    cursor: pointer;
+}
+
+
+.btn:disabled {
+
+    opacity: 0.5;
+
+    cursor: not-allowed;
+}
+
+
+.btn.start {
+
+    background: #16a34a;
+
+    color: white;
+}
+
+
+.btn.stop {
+
+    background: #dc2626;
+
+    color: white;
+}
+
+
+/* =========================================================
+   CAMERA
+========================================================= */
+
+.camera-container {
+
+    background: #000;
+
+    border-radius: 10px;
+
+    overflow: hidden;
+
+    width: 100%;
+
+    position: relative;
+
+    min-height: 400px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+}
+
+
+/*
+    We hide the original camera.
+
+    The user sees the annotated canvas.
+*/
+
+#camera {
+
+    display: none;
+}
+
+
+#resultCanvas {
+
+    width: 100%;
+
+    max-height: 650px;
+
+    object-fit: contain;
+
+    display: block;
+}
+
+
+.camera-message {
+
+    text-align: center;
+
+    color: #6b7280;
+
+    margin-top: 12px;
+
+    font-size: 14px;
+}
+
+
+/* =========================================================
+   DETECTION CARDS
+========================================================= */
+
+.cards {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(4, 1fr);
+
+    gap: 15px;
+}
+
+
+.card {
+
+    border: 1px solid #e5e7eb;
+
+    border-radius: 10px;
+
+    padding: 18px;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 15px;
+}
+
+
+.card-icon {
+
+    font-size: 30px;
+}
+
+
+.card h3 {
+
+    font-size: 15px;
+
+    margin-bottom: 5px;
+}
+
+
+.card p {
+
+    color: #6b7280;
+
+    font-size: 13px;
+}
+
+
+/* =========================================================
+   DETECTION LIST
+========================================================= */
+
+.detection-list {
+
+    display: flex;
+
+    flex-wrap: wrap;
+
+    gap: 10px;
+}
+
+
+.detection {
+
+    background: #f3f4f6;
+
+    border-radius: 7px;
+
+    padding: 10px 14px;
+
+    font-size: 13px;
+}
+
+
+.empty {
+
+    color: #9ca3af;
+
+    font-size: 14px;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 900px) {
+
+    .cards {
+
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+
+}
+
+
+@media (max-width: 600px) {
+
+    .header {
+
+        padding: 20px;
+
+        flex-direction: column;
+
+        align-items: flex-start;
+    }
+
+
+    .section-header {
+
+        flex-direction: column;
+
+        align-items: flex-start;
+    }
+
+
+    .cards {
+
+        grid-template-columns: 1fr;
+    }
+
+
+    .container {
+
+        padding: 0 10px;
+    }
+
+}

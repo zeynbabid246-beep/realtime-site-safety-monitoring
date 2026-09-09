@@ -1,0 +1,32 @@
+@"
+# Environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+
+# Datasets / data
+data/
+
+# Videos
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Generated outputs
+runs/
+person_tracking_test/output/
+
+# Models / weights
+*.pt
+*.onnx
+*.engine
+
+# IDE
+.vscode/
+.idea/
+"@ | Out-File -Encoding utf8 .gitignore
