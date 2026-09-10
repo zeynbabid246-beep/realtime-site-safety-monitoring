@@ -36,6 +36,7 @@ HazardDetector per stream and inject it into that stream's SafetyPipeline
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import shutil
@@ -155,7 +156,7 @@ hazard_detector = HazardDetector(HAZARD_MODEL_PATH, confidence=0.25, image_size=
 logger.info("Hazard classes: %s", hazard_detector.class_names)
 
 logger.info("Loading fire/smoke model...")
-fire_detector = FireDetector(FIRE_MODEL_PATH, confidence=0.20, image_size=640)
+fire_detector = FireDetector(FIRE_MODEL_PATH, confidence=0.20, image_size=416)
 logger.info("Fire/smoke classes: %s", fire_detector.class_names)
 
 DEFAULT_SAFETY_CONFIG = SafetyConfig()
@@ -433,7 +434,35 @@ async def safety_camera_websocket(websocket: WebSocket):
     monitor = _new_monitor("camera")
 
     consecutive_failures = 0
-    MAX_CONSECUTIVE_FAILURES = 20  # guard against a persistently broken stream
+    MAX_CONSECUTIVE_FAILURES = 20
+
+    async def _drain_to_latest() -> Optional[bytes]:
+        """Consume all queued client frames, keeping only the newest one.
+
+        Prevents stale frames from piling up when inference is slower than
+        the client's send rate - the frontend's backpressure already limits
+        this, but this is a safety net for burst traffic.
+        """
+        latest: Optional[bytes] = None
+        while True:
+            try:
+                msg = await asyncio.wait_for(websocket.receive(), timeout=0.005)
+            except asyncio.TimeoutError:
+                break
+            if msg.get("type") == "websocket.disconnect":
+                return None
+            data = msg.get("bytes")
+            if not data and msg.get("text"):
+                try:
+                    text_str = msg["text"]
+                    if "," in text_str:
+                        text_str = text_str.split(",")[1]
+                    data = base64.b64decode(text_str)
+                except Exception:  # noqa: BLE001
+                    data = None
+            if data:
+                latest = data
+        return latest
 
     try:
         while True:
@@ -457,40 +486,46 @@ async def safety_camera_websocket(websocket: WebSocket):
             if not data:
                 continue
 
+            # Drain any frames queued while we were processing - only the
+            # freshest frame matters for a live feed.
+            newer = await _drain_to_latest()
+            if newer is not None:
+                data = newer
+
             try:
                 frame = await run_in_threadpool(_decode_frame, data)
                 if frame is None:
                     raise ValueError("Could not decode incoming frame")
 
-                # Inference + annotation off the event loop.
                 frame_result = await run_in_threadpool(
                     pipeline.process_frame, frame, True, True
                 )
 
                 success, encoded = cv2.imencode(
-                    ".jpg", frame_result.annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75]
+                    ".jpg", frame_result.annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 60]
                 )
                 if not success:
                     raise ValueError("Failed to encode annotated frame")
 
-                base64_img = base64.b64encode(encoded.tobytes()).decode("utf-8")
+                # Binary frame - 33% smaller than base64, no JSON parsing overhead.
+                await websocket.send_bytes(encoded.tobytes())
 
-                await websocket.send_json(
-                    {
-                        "image": f"data:image/jpeg;base64,{base64_img}",
-                        **_build_payload(frame_result.result, frame_result.detections),
-                    }
-                )
+                # JSON metadata as a separate text message. The frontend uses
+                # this as the "done" signal to send the next frame.
+                await websocket.send_json({
+                    "frame_done": True,
+                    **_build_payload(frame_result.result, frame_result.detections),
+                })
 
-                # Durability: history / evidence / alerts (off the event loop).
+                # Monitor runs in background - don't block the next frame.
                 if monitor is not None:
-                    await run_in_threadpool(monitor.handle, frame_result.result, frame_result.annotated)
+                    asyncio.create_task(
+                        run_in_threadpool(monitor.handle, frame_result.result, frame_result.annotated)
+                    )
 
                 consecutive_failures = 0
 
             except Exception as exc:  # noqa: BLE001
-                # Skip this frame, keep the connection alive. Only bail out
-                # if failures are persistent rather than one-off.
                 consecutive_failures += 1
                 logger.warning(
                     "Frame processing failed (%d consecutive): %s",

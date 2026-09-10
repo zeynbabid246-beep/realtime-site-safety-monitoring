@@ -71,6 +71,7 @@ const mobileMenuBtn = document.getElementById("mobileMenuBtn");
 let cameraStream = null;
 let socket = null;
 let sendingFrames = false;
+let awaitingResponse = false;
 let activeTab = "dashboard";
 let pollTimer = null;
 
@@ -265,28 +266,7 @@ function connectWebSocket() {
     };
 
     socket.onmessage = (event) => {
-        if (typeof event.data === "string") {
-            try {
-                const payload = JSON.parse(event.data);
-
-                if (payload.image) {
-                    const image = new Image();
-                    image.onload = () => {
-                        canvas.width = image.width;
-                        canvas.height = image.height;
-                        ctx.drawImage(image, 0, 0);
-                    };
-                    image.src = payload.image;
-                }
-
-                if (payload.summary || payload.detections) {
-                    updateDetectionUI(payload.summary, payload.detections);
-                }
-
-            } catch (err) {
-                console.error("Error parsing WebSocket JSON message:", err);
-            }
-        } else if (event.data instanceof Blob) {
+        if (event.data instanceof Blob) {
             const image = new Image();
             image.onload = () => {
                 canvas.width = image.width;
@@ -295,6 +275,22 @@ function connectWebSocket() {
                 URL.revokeObjectURL(image.src);
             };
             image.src = URL.createObjectURL(event.data);
+        } else if (typeof event.data === "string") {
+            try {
+                const payload = JSON.parse(event.data);
+
+                if (payload.summary || payload.detections) {
+                    updateDetectionUI(payload.summary, payload.detections);
+                }
+
+                if (payload.frame_done) {
+                    awaitingResponse = false;
+                    setTimeout(sendFrame, 30);
+                }
+            } catch (err) {
+                console.error("Error parsing WebSocket JSON message:", err);
+                awaitingResponse = false;
+            }
         }
     };
 
@@ -302,11 +298,13 @@ function connectWebSocket() {
         console.error("WebSocket error details:", error);
         cameraMessage.textContent = "WebSocket connection error! Make sure the server is running on port 8000.";
         setConnectionState("disconnected");
+        awaitingResponse = false;
     };
 
     socket.onclose = (event) => {
         console.log("WebSocket disconnected.", event);
         sendingFrames = false;
+        awaitingResponse = false;
         setConnectionState("disconnected");
     };
 }
@@ -317,7 +315,7 @@ function connectWebSocket() {
 // ============================================================
 
 function sendFrame() {
-    if (!sendingFrames) return;
+    if (!sendingFrames || awaitingResponse) return;
 
     if (!socket || socket.readyState !== WebSocket.OPEN) {
         if (socket && socket.readyState === WebSocket.CONNECTING) {
@@ -341,14 +339,12 @@ function sendFrame() {
     tempCanvas.toBlob(
         (blob) => {
             if (blob && socket && socket.readyState === WebSocket.OPEN) {
+                awaitingResponse = true;
                 socket.send(blob);
-            }
-            if (sendingFrames) {
-                setTimeout(sendFrame, 100);
             }
         },
         "image/jpeg",
-        0.7
+        0.5
     );
 }
 
@@ -361,6 +357,7 @@ function stopCamera() {
     console.log("Stopping camera...");
 
     sendingFrames = false;
+    awaitingResponse = false;
 
     if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
