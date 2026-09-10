@@ -23,7 +23,8 @@ def _det(class_name, confidence, bbox, **extra):
 
 def test_person_confidence_threshold():
     assert passes_confidence("Person", 0.60) is True
-    assert passes_confidence("Person", 0.40) is False
+    assert passes_confidence("Person", 0.40) is True  # Threshold lowered from 0.52 to 0.35
+    assert passes_confidence("Person", 0.30) is False
 
 
 def test_unknown_class_falls_back_to_default():
@@ -33,10 +34,10 @@ def test_unknown_class_falls_back_to_default():
 
 
 def test_edge_of_frame_requires_higher_confidence():
-    # A person touching the left edge needs base 0.52 + 0.12 edge bonus.
+    # A person touching the left edge needs base 0.35 + 0.12 edge bonus = 0.47.
     bbox_at_edge = [0, 200, 60, 600]
-    assert passes_confidence("Person", 0.58, bbox_at_edge, FRAME) is False
-    assert passes_confidence("Person", 0.70, bbox_at_edge, FRAME) is True
+    assert passes_confidence("Person", 0.45, bbox_at_edge, FRAME) is False
+    assert passes_confidence("Person", 0.50, bbox_at_edge, FRAME) is True
 
 
 # ------------------------------------------------------------------

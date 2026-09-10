@@ -73,7 +73,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 DEFAULT_MIN_CONFIDENCE = 0.25
 
 MIN_CONFIDENCE_BY_CLASS: Dict[str, float] = {
-    "Person": 0.52,          # Raised to eliminate false positives like poles/debris (ID:504)
+    "Person": 0.35,            # Lowered from 0.52 to avoid missing valid detections
     "machinery": 0.52,       # Catches house -> machinery 0.34-0.50
     "vehicle": 0.52,
     "Hardhat": 0.50,

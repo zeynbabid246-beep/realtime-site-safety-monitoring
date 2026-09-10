@@ -156,7 +156,7 @@ hazard_detector = HazardDetector(HAZARD_MODEL_PATH, confidence=0.25, image_size=
 logger.info("Hazard classes: %s", hazard_detector.class_names)
 
 logger.info("Loading fire/smoke model...")
-fire_detector = FireDetector(FIRE_MODEL_PATH, confidence=0.20, image_size=416)
+fire_detector = FireDetector(FIRE_MODEL_PATH, confidence=0.35, image_size=416)
 logger.info("Fire/smoke classes: %s", fire_detector.class_names)
 
 DEFAULT_SAFETY_CONFIG = SafetyConfig()
