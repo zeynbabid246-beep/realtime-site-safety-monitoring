@@ -76,12 +76,12 @@ MIN_CONFIDENCE_BY_CLASS: Dict[str, float] = {
     "Person": 0.35,            # Lowered from 0.52 to avoid missing valid detections
     "machinery": 0.52,       # Catches house -> machinery 0.34-0.50
     "vehicle": 0.52,
-    "Hardhat": 0.50,
-    "NO-Hardhat": 0.40,
-    "Safety Vest": 0.45,
-    "NO-Safety Vest": 0.40,
-    "Mask": 0.40,
-    "NO-Mask": 0.40,
+    "Hardhat": 0.45,
+    "NO-Hardhat": 0.30,        # Lowered from 0.40 to match violation_confidence
+    "Safety Vest": 0.40,
+    "NO-Safety Vest": 0.30,    # Lowered from 0.40 to match violation_confidence
+    "Mask": 0.35,
+    "NO-Mask": 0.30,           # Lowered from 0.40 to match violation_confidence
     "Safety Cone": 0.40,
     "utility pole": 0.50,
 }
