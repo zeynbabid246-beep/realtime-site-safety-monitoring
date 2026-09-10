@@ -8,8 +8,6 @@ function getWebSocketUrl() {
     if (!host || host === "") {
         host = "127.0.0.1";
     }
-    // Connect to backend server on port 8000 (must match the FastAPI
-    // route in app/main.py: @app.websocket("/safety/ws/camera")).
     return `${protocol}//${host}:8000/safety/ws/camera`;
 }
 
@@ -27,8 +25,6 @@ function apiUrl(path) {
     return `${API}${path}`;
 }
 
-// Evidence files are served read-only from the /evidence StaticFiles mount;
-// the DB stores posix-relative paths under that directory.
 function evidenceUrl(relPath) {
     if (!relPath) return null;
     return apiUrl(`/evidence/${relPath}`);
@@ -58,6 +54,14 @@ const detectionList = document.getElementById("detectionList");
 
 const alertBadge = document.getElementById("alertBadge");
 const alertBadgeCount = document.getElementById("alertBadgeCount");
+const navAlertBadge = document.getElementById("navAlertBadge");
+
+const cameraPlaceholder = document.getElementById("cameraPlaceholder");
+const pageTitle = document.getElementById("pageTitle");
+const pageSubtitle = document.getElementById("pageSubtitle");
+const sidebar = document.getElementById("sidebar");
+const sidebarOverlay = document.getElementById("sidebarOverlay");
+const mobileMenuBtn = document.getElementById("mobileMenuBtn");
 
 
 // ============================================================
@@ -69,6 +73,15 @@ let socket = null;
 let sendingFrames = false;
 let activeTab = "dashboard";
 let pollTimer = null;
+
+const PAGE_TITLES = {
+    dashboard: ["Dashboard", "Real-time safety monitoring and detection"],
+    alerts: ["Alerts", "Safety alert feed and notifications"],
+    history: ["History", "Complete log of safety events"],
+    statistics: ["Statistics", "Aggregated safety metrics and trends"],
+    evidence: ["Evidence", "Captured snapshots and video clips"],
+    reports: ["Reports", "Export and generate safety reports"],
+};
 
 
 // ============================================================
@@ -123,23 +136,32 @@ async function getJson(path) {
 // ============================================================
 
 function updateDetectionUI(summary, detections) {
+    if (cameraPlaceholder) {
+        cameraPlaceholder.style.display = "none";
+    }
+
     if (summary) {
         if (riskBadge) {
             const risk = summary.risk_level || "SAFE";
-            riskBadge.textContent = `RISK: ${risk}`;
+            const valueEl = riskBadge.querySelector(".risk-value");
+            if (valueEl) {
+                valueEl.textContent = risk;
+            } else {
+                riskBadge.textContent = risk;
+            }
             riskBadge.style.color = RISK_COLORS[risk] || "#6b7280";
         }
 
         if (summary.ppe_violations > 0) {
-            ppeStatus.textContent = `⚠️ ${summary.ppe_violations} Violation(s)`;
+            ppeStatus.textContent = `${summary.ppe_violations} Violation(s)`;
             ppeStatus.style.color = "#dc2626";
         } else {
-            ppeStatus.textContent = "✅ Compliant";
+            ppeStatus.textContent = "Compliant";
             ppeStatus.style.color = "#16a34a";
         }
 
         if (summary.fire_count > 0) {
-            fireStatus.textContent = `🔥 DETECTED (${summary.fire_count})`;
+            fireStatus.textContent = `DETECTED (${summary.fire_count})`;
             fireStatus.style.color = "#dc2626";
         } else {
             fireStatus.textContent = "Clear";
@@ -147,7 +169,7 @@ function updateDetectionUI(summary, detections) {
         }
 
         if (summary.smoke_count > 0) {
-            smokeStatus.textContent = `💨 DETECTED (${summary.smoke_count})`;
+            smokeStatus.textContent = `DETECTED (${summary.smoke_count})`;
             smokeStatus.style.color = "#d97706";
         } else {
             smokeStatus.textContent = "Clear";
@@ -155,7 +177,7 @@ function updateDetectionUI(summary, detections) {
         }
 
         if (summary.person_count > 0) {
-            personStatus.textContent = `👷 ${summary.person_count} Present`;
+            personStatus.textContent = `${summary.person_count} Present`;
             personStatus.style.color = "#2563eb";
         } else {
             personStatus.textContent = "None";
@@ -165,7 +187,15 @@ function updateDetectionUI(summary, detections) {
 
     if (Array.isArray(detections)) {
         if (detections.length === 0) {
-            detectionList.innerHTML = '<p class="empty">No detections in current frame.</p>';
+            detectionList.innerHTML = `
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <p>No detections in current frame</p>
+                </div>`;
         } else {
             detectionList.innerHTML = detections.map(d => `
                 <div class="detection">
@@ -210,6 +240,16 @@ async function startCamera() {
 // CONNECT WEBSOCKET
 // ============================================================
 
+function setConnectionState(state) {
+    const dot = connectionStatus.querySelector(".status-dot");
+    const text = connectionStatus.querySelector(".status-text");
+    connectionStatus.classList.remove("connected", "disconnected");
+    connectionStatus.classList.add(state);
+    if (text) {
+        text.textContent = state === "connected" ? "Connected" : "Disconnected";
+    }
+}
+
 function connectWebSocket() {
     const wsUrl = getWebSocketUrl();
     console.log("Connecting to WebSocket URL:", wsUrl);
@@ -218,13 +258,8 @@ function connectWebSocket() {
 
     socket.onopen = () => {
         console.log("WebSocket connected successfully.");
-
-        connectionStatus.textContent = "● Connected";
-        connectionStatus.classList.remove("disconnected");
-        connectionStatus.classList.add("connected");
-
+        setConnectionState("connected");
         cameraMessage.textContent = "Camera is running. AI detection is active.";
-
         sendingFrames = true;
         sendFrame();
     };
@@ -265,18 +300,14 @@ function connectWebSocket() {
 
     socket.onerror = (error) => {
         console.error("WebSocket error details:", error);
-        cameraMessage.textContent = "WebSocket connection error! Please make sure the FastAPI server is running on http://127.0.0.1:8000.";
-        connectionStatus.textContent = "● Error";
-        connectionStatus.classList.remove("connected");
-        connectionStatus.classList.add("disconnected");
+        cameraMessage.textContent = "WebSocket connection error! Make sure the server is running on port 8000.";
+        setConnectionState("disconnected");
     };
 
     socket.onclose = (event) => {
         console.log("WebSocket disconnected.", event);
         sendingFrames = false;
-        connectionStatus.textContent = "● Disconnected";
-        connectionStatus.classList.remove("connected");
-        connectionStatus.classList.add("disconnected");
+        setConnectionState("disconnected");
     };
 }
 
@@ -358,30 +389,49 @@ function stopCamera() {
     personStatus.style.color = "";
 
     if (riskBadge) {
-        riskBadge.textContent = "RISK: —";
+        const valueEl = riskBadge.querySelector(".risk-value");
+        if (valueEl) valueEl.textContent = "—";
         riskBadge.style.color = "";
     }
 
-    detectionList.innerHTML = '<p class="empty">No detections yet.</p>';
+    if (cameraPlaceholder) {
+        cameraPlaceholder.style.display = "";
+    }
+
+    detectionList.innerHTML = `
+        <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p>No detections yet</p>
+            <span>Start the camera to see live detections</span>
+        </div>`;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 
 // ============================================================
-// TABS
+// TABS / NAVIGATION
 // ============================================================
 
 function switchTab(name) {
     activeTab = name;
 
-    document.querySelectorAll(".tab").forEach(btn => {
+    document.querySelectorAll(".nav-item").forEach(btn => {
         btn.classList.toggle("active", btn.dataset.tab === name);
     });
     document.querySelectorAll(".tab-panel").forEach(panel => {
         panel.classList.toggle("active", panel.id === `panel-${name}`);
     });
 
+    const titles = PAGE_TITLES[name] || ["", ""];
+    if (pageTitle) pageTitle.textContent = titles[0];
+    if (pageSubtitle) pageSubtitle.textContent = titles[1];
+
+    closeMobileMenu();
     refreshActiveTab();
 }
 
@@ -398,6 +448,27 @@ function refreshActiveTab() {
 
 
 // ============================================================
+// MOBILE MENU
+// ============================================================
+
+function closeMobileMenu() {
+    sidebar.classList.remove("open");
+    sidebarOverlay.classList.remove("active");
+}
+
+if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener("click", () => {
+        sidebar.classList.toggle("open");
+        sidebarOverlay.classList.toggle("active");
+    });
+}
+
+if (sidebarOverlay) {
+    sidebarOverlay.addEventListener("click", closeMobileMenu);
+}
+
+
+// ============================================================
 // ALERT BADGE (global)
 // ============================================================
 
@@ -405,11 +476,17 @@ async function loadAlertBadge() {
     try {
         const data = await getJson("/api/alerts?limit=1&status=new");
         const n = data.unacknowledged || 0;
+        const display = n > 99 ? "99+" : String(n);
+
+        if (alertBadgeCount) alertBadgeCount.textContent = display;
+        if (navAlertBadge) navAlertBadge.textContent = display;
+
         if (n > 0) {
-            alertBadgeCount.textContent = n > 99 ? "99+" : String(n);
             alertBadge.classList.remove("hidden");
+            if (navAlertBadge) navAlertBadge.classList.remove("hidden");
         } else {
             alertBadge.classList.add("hidden");
+            if (navAlertBadge) navAlertBadge.classList.add("hidden");
         }
     } catch (err) {
         console.debug("Alert badge poll failed:", err);
@@ -431,15 +508,22 @@ async function loadAlerts() {
         const alerts = data.alerts || [];
 
         if (alerts.length === 0) {
-            list.innerHTML = '<p class="empty">No alerts in this view.</p>';
+            list.innerHTML = `
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                    <p>No alerts in this view</p>
+                </div>`;
             return;
         }
 
         list.innerHTML = alerts.map(a => {
             const acked = a.status === "acknowledged";
             const ackControl = acked
-                ? '<span class="alert-ack">✓ Acknowledged</span>'
-                : `<button class="btn start" data-ack="${a.id}">Acknowledge</button>`;
+                ? '<span class="alert-ack">Acknowledged</span>'
+                : `<button class="btn btn-primary" data-ack="${a.id}">Acknowledge</button>`;
             return `
                 <div class="alert-item level-${escapeHtml(a.level)}">
                     <div class="alert-main">
@@ -459,7 +543,7 @@ async function loadAlerts() {
         });
 
     } catch (err) {
-        list.innerHTML = `<p class="empty">Could not load alerts (${escapeHtml(err.message)}).</p>`;
+        list.innerHTML = `<div class="empty">Could not load alerts (${escapeHtml(err.message)}).</div>`;
     }
 }
 
@@ -491,7 +575,7 @@ async function loadHistory() {
         const events = data.events || [];
 
         if (events.length === 0) {
-            body.innerHTML = '<tr><td colspan="8" class="empty">No events recorded.</td></tr>';
+            body.innerHTML = '<tr><td colspan="8"><div class="empty">No events recorded.</div></td></tr>';
             return;
         }
 
@@ -514,7 +598,7 @@ async function loadHistory() {
         }).join("");
 
     } catch (err) {
-        body.innerHTML = `<tr><td colspan="8" class="empty">Could not load history (${escapeHtml(err.message)}).</td></tr>`;
+        body.innerHTML = `<tr><td colspan="8"><div class="empty">Could not load history (${escapeHtml(err.message)}).</div></td></tr>`;
     }
 }
 
@@ -528,13 +612,13 @@ function barChart(container, entries, colorFn) {
     const items = entries.filter(([, v]) => v > 0);
 
     if (items.length === 0) {
-        el.innerHTML = '<p class="empty">No data in this range.</p>';
+        el.innerHTML = '<div class="empty">No data in this range.</div>';
         return;
     }
 
     const max = Math.max(...items.map(([, v]) => v));
 
-    el.innerHTML = items.map(([label, value]) => {
+    el.innerHTML = `<div class="bar-chart">${items.map(([label, value]) => {
         const pct = max > 0 ? (value / max) * 100 : 0;
         const color = colorFn ? colorFn(label) : "#2563eb";
         return `
@@ -544,7 +628,7 @@ function barChart(container, entries, colorFn) {
                 <div class="bar-value">${value}</div>
             </div>
         `;
-    }).join("");
+    }).join("")}</div>`;
 }
 
 async function loadStatistics() {
@@ -563,9 +647,11 @@ async function loadStatistics() {
             ["With snapshot", t.events_with_image ?? 0],
             ["With clip", t.events_with_clip ?? 0],
         ].map(([label, value]) => `
-            <div class="card stat-card">
-                <div class="stat-value">${value}</div>
-                <div class="stat-label">${escapeHtml(label)}</div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <span class="stat-value">${value}</span>
+                    <span class="stat-label">${escapeHtml(label)}</span>
+                </div>
             </div>
         `).join("");
 
@@ -577,7 +663,7 @@ async function loadStatistics() {
         barChart("dayChart", Object.entries(r.by_day || {}));
 
     } catch (err) {
-        cards.innerHTML = `<p class="empty">Could not load statistics (${escapeHtml(err.message)}).</p>`;
+        cards.innerHTML = `<div class="empty">Could not load statistics (${escapeHtml(err.message)}).</div>`;
     }
 }
 
@@ -594,7 +680,16 @@ async function loadEvidence() {
         const items = data.evidence || [];
 
         if (items.length === 0) {
-            gallery.innerHTML = '<p class="empty">No evidence captured yet. Evidence is saved on HIGH/CRITICAL events.</p>';
+            gallery.innerHTML = `
+                <div class="empty-state" style="grid-column: 1/-1">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <p>No evidence captured yet</p>
+                    <span>Evidence is saved automatically on HIGH/CRITICAL events</span>
+                </div>`;
             return;
         }
 
@@ -623,7 +718,7 @@ async function loadEvidence() {
         }).join("");
 
     } catch (err) {
-        gallery.innerHTML = `<p class="empty">Could not load evidence (${escapeHtml(err.message)}).</p>`;
+        gallery.innerHTML = `<div class="empty">Could not load evidence (${escapeHtml(err.message)}).</div>`;
     }
 }
 
@@ -640,7 +735,6 @@ async function loadReport() {
     const summary = document.getElementById("reportSummary");
     const range = document.getElementById("reportRange").value;
 
-    // Wire the download links to the current range.
     document.getElementById("downloadJson").href =
         apiUrl(`/api/reports/download?range=${encodeURIComponent(range)}&format=json`);
     document.getElementById("downloadCsv").href =
@@ -677,25 +771,25 @@ async function loadReport() {
             <div class="report-block">
                 <h3>By source</h3>
                 <div class="kv-grid">
-                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<p class="empty">No data.</p>'}
+                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<div class="empty">No data.</div>'}
                 </div>
             </div>
 
             <div class="report-block">
                 <h3>Most severe events</h3>
-                <div class="table-wrap">
+                <div class="table-container">
                     <table class="data-table">
                         <thead>
                             <tr><th>Time</th><th>Source</th><th>Risk</th><th>Violations</th><th>Detail</th></tr>
                         </thead>
-                        <tbody>${topRows || '<tr><td colspan="5" class="empty">No events.</td></tr>'}</tbody>
+                        <tbody>${topRows || '<tr><td colspan="5"><div class="empty">No events.</div></td></tr>'}</tbody>
                     </table>
                 </div>
             </div>
         `;
 
     } catch (err) {
-        summary.innerHTML = `<p class="empty">Could not generate report (${escapeHtml(err.message)}).</p>`;
+        summary.innerHTML = `<div class="empty">Could not generate report (${escapeHtml(err.message)}).</div>`;
     }
 }
 
@@ -708,7 +802,6 @@ function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(() => {
         loadAlertBadge();
-        // Keep data-heavy tabs fresh only while they're visible.
         if (activeTab === "alerts") loadAlerts();
         else if (activeTab === "history") loadHistory();
         else if (activeTab === "statistics") loadStatistics();
@@ -723,8 +816,8 @@ function startPolling() {
 startButton.addEventListener("click", startCamera);
 stopButton.addEventListener("click", stopCamera);
 
-document.getElementById("tabs").addEventListener("click", (e) => {
-    const btn = e.target.closest(".tab");
+document.querySelector(".sidebar-nav").addEventListener("click", (e) => {
+    const btn = e.target.closest(".nav-item");
     if (btn) switchTab(btn.dataset.tab);
 });
 

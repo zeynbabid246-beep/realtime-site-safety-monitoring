@@ -1,464 +1,473 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>
-        Construction Safety AI
-    </title>
-
-    <link
-        rel="stylesheet"
-        href="style.css"
-    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Construction Safety AI - Real-time Monitoring Platform</title>
+    <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-
-    <!-- =====================================================
-         HEADER
-    ====================================================== -->
-
-    <header class="header">
-
-        <div>
-            <h1>
-                🏗️ Construction Safety AI
-            </h1>
-
-            <p>
-                Real-time PPE &amp; Fire/Smoke Detection
-            </p>
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M2 20h20M5 20V10l7-7 7 7v10M9 20v-6h6v6"/>
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>SafetyAI</h1>
+                    <span>Monitoring Platform</span>
+                </div>
+            </div>
         </div>
 
-        <div class="header-right">
+        <nav class="sidebar-nav">
+            <button class="nav-item active" data-tab="dashboard">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/>
+                    <rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+                <span>Dashboard</span>
+            </button>
+            <button class="nav-item" data-tab="alerts">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                <span>Alerts</span>
+                <span class="nav-badge hidden" id="navAlertBadge">0</span>
+            </button>
+            <button class="nav-item" data-tab="history">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span>History</span>
+            </button>
+            <button class="nav-item" data-tab="statistics">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+                <span>Statistics</span>
+            </button>
+            <button class="nav-item" data-tab="evidence">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                <span>Evidence</span>
+            </button>
+            <button class="nav-item" data-tab="reports">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+                <span>Reports</span>
+            </button>
+        </nav>
 
-            <div
-                id="alertBadge"
-                class="alert-badge hidden"
-                title="Unacknowledged alerts"
-            >
-                🔔 <span id="alertBadgeCount">0</span>
+        <div class="sidebar-footer">
+            <div class="connection-indicator" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Disconnected</span>
             </div>
-
-            <div
-                id="connectionStatus"
-                class="status disconnected"
-            >
-                ● Disconnected
-            </div>
-
         </div>
+    </aside>
 
-    </header>
+    <!-- Main Content -->
+    <div class="main-wrapper">
+        <!-- Top Header Bar -->
+        <header class="top-header">
+            <button class="mobile-menu-btn" id="mobileMenuBtn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="12" x2="21" y2="12"/>
+                    <line x1="3" y1="6" x2="21" y2="6"/>
+                    <line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </button>
 
+            <div class="header-title">
+                <h2 id="pageTitle">Dashboard</h2>
+                <p id="pageSubtitle">Real-time safety monitoring and detection</p>
+            </div>
 
-    <!-- =====================================================
-         TAB NAV
-    ====================================================== -->
-
-    <nav class="tabs" id="tabs">
-
-        <button class="tab active" data-tab="dashboard">Dashboard</button>
-        <button class="tab" data-tab="alerts">Alerts</button>
-        <button class="tab" data-tab="history">History</button>
-        <button class="tab" data-tab="statistics">Statistics</button>
-        <button class="tab" data-tab="evidence">Evidence</button>
-        <button class="tab" data-tab="reports">Reports</button>
-
-    </nav>
-
-
-    <!-- =====================================================
-         MAIN
-    ====================================================== -->
-
-    <main class="container">
-
-        <!-- =================================================
-             DASHBOARD (live camera)
-        ================================================== -->
-
-        <section class="tab-panel active" id="panel-dashboard">
-
-            <section class="camera-section">
-
-                <div class="section-header">
-
-                    <h2>
-                        Live Camera
-                    </h2>
-
-                    <div class="controls">
-
-                        <button
-                            id="startButton"
-                            class="btn start"
-                        >
-                            ▶ Start Camera
-                        </button>
-
-                        <button
-                            id="stopButton"
-                            class="btn stop"
-                            disabled
-                        >
-                            ■ Stop Camera
-                        </button>
-
-                    </div>
-
+            <div class="header-actions">
+                <div class="header-badge" id="alertBadge" title="Unacknowledged alerts">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                    <span class="badge-count" id="alertBadgeCount">0</span>
                 </div>
+            </div>
+        </header>
 
-
-                <div class="camera-container">
-
-                    <!-- Original webcam -->
-
-                    <video
-                        id="camera"
-                        autoplay
-                        playsinline
-                        muted
-                    >
-                    </video>
-
-
-                    <!-- Detection result -->
-
-                    <canvas
-                        id="resultCanvas"
-                    >
-                    </canvas>
-
-                </div>
-
-
-                <p
-                    id="cameraMessage"
-                    class="camera-message"
-                >
-                    Click "Start Camera" to begin detection.
-                </p>
-
-                <p
-                    id="riskBadge"
-                    class="camera-message"
-                    style="font-weight: 700; letter-spacing: 0.5px;"
-                >
-                    RISK: —
-                </p>
-
-            </section>
-
-
-            <section class="detections-section">
-
-                <h2>
-                    Detection Status
-                </h2>
-
-
-                <div class="cards">
-
-                    <!-- PPE -->
-
-                    <div class="card">
-
-                        <div class="card-icon">🦺</div>
-
-                        <div class="card-content">
-                            <h3>PPE</h3>
-                            <p id="ppeStatus">Waiting...</p>
+        <!-- Main Content Area -->
+        <main class="content">
+            <!-- Dashboard Panel -->
+            <section class="tab-panel active" id="panel-dashboard">
+                <!-- Live Camera Section -->
+                <div class="card camera-card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <h3>Live Camera Feed</h3>
+                            <p>Real-time AI-powered safety detection</p>
                         </div>
-
-                    </div>
-
-
-                    <!-- FIRE -->
-
-                    <div class="card">
-
-                        <div class="card-icon">🔥</div>
-
-                        <div class="card-content">
-                            <h3>Fire</h3>
-                            <p id="fireStatus">Waiting...</p>
+                        <div class="card-actions">
+                            <button id="startButton" class="btn btn-primary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <polygon points="5 3 19 12 5 21 5 3"/>
+                                </svg>
+                                Start Camera
+                            </button>
+                            <button id="stopButton" class="btn btn-danger" disabled>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <rect x="6" y="6" width="12" height="12" rx="1"/>
+                                </svg>
+                                Stop Camera
+                            </button>
                         </div>
-
                     </div>
 
-
-                    <!-- SMOKE -->
-
-                    <div class="card">
-
-                        <div class="card-icon">💨</div>
-
-                        <div class="card-content">
-                            <h3>Smoke</h3>
-                            <p id="smokeStatus">Waiting...</p>
+                    <div class="camera-container">
+                        <video id="camera" autoplay playsinline muted></video>
+                        <canvas id="resultCanvas"></canvas>
+                        <div class="camera-placeholder" id="cameraPlaceholder">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                <circle cx="12" cy="13" r="4"/>
+                            </svg>
+                            <p>Click "Start Camera" to begin live detection</p>
                         </div>
-
                     </div>
 
+                    <div class="camera-footer">
+                        <p id="cameraMessage" class="camera-message">Ready to start</p>
+                        <p id="riskBadge" class="risk-indicator">
+                            <span class="risk-label">RISK LEVEL</span>
+                            <span class="risk-value">—</span>
+                        </p>
+                    </div>
+                </div>
 
-                    <!-- PEOPLE -->
-
-                    <div class="card">
-
-                        <div class="card-icon">👷</div>
-
-                        <div class="card-content">
-                            <h3>People</h3>
-                            <p id="personStatus">Waiting...</p>
+                <!-- Detection Status Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card" id="ppeCard">
+                        <div class="stat-icon ppe-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
                         </div>
-
+                        <div class="stat-info">
+                            <span class="stat-label">PPE Status</span>
+                            <span class="stat-value" id="ppeStatus">Waiting...</span>
+                        </div>
                     </div>
 
-                </div>
-
-            </section>
-
-
-            <section class="details-section">
-
-                <h2>
-                    Current Detections
-                </h2>
-
-                <div
-                    id="detectionList"
-                    class="detection-list"
-                >
-                    <p class="empty">No detections yet.</p>
-                </div>
-
-            </section>
-
-        </section>
-
-
-        <!-- =================================================
-             ALERTS
-        ================================================== -->
-
-        <section class="tab-panel" id="panel-alerts">
-
-            <section class="details-section">
-
-                <div class="section-header">
-
-                    <h2>Alerts</h2>
-
-                    <div class="controls">
-
-                        <select id="alertStatusFilter" class="select">
-                            <option value="">All statuses</option>
-                            <option value="new">New</option>
-                            <option value="acknowledged">Acknowledged</option>
-                        </select>
-
-                        <button id="refreshAlerts" class="btn start">↻ Refresh</button>
-
+                    <div class="stat-card" id="fireCard">
+                        <div class="stat-icon fire-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Fire</span>
+                            <span class="stat-value" id="fireStatus">Waiting...</span>
+                        </div>
                     </div>
 
-                </div>
-
-                <div id="alertsList" class="alert-list">
-                    <p class="empty">Loading alerts…</p>
-                </div>
-
-            </section>
-
-        </section>
-
-
-        <!-- =================================================
-             HISTORY
-        ================================================== -->
-
-        <section class="tab-panel" id="panel-history">
-
-            <section class="details-section">
-
-                <div class="section-header">
-
-                    <h2>Event History</h2>
-
-                    <div class="controls">
-
-                        <select id="historyRiskFilter" class="select">
-                            <option value="">All risk</option>
-                            <option value="LOW">LOW</option>
-                            <option value="MEDIUM">MEDIUM</option>
-                            <option value="HIGH">HIGH</option>
-                            <option value="CRITICAL">CRITICAL</option>
-                        </select>
-
-                        <select id="historySourceFilter" class="select">
-                            <option value="">All sources</option>
-                            <option value="camera">camera</option>
-                            <option value="video">video</option>
-                            <option value="image">image</option>
-                        </select>
-
-                        <button id="refreshHistory" class="btn start">↻ Refresh</button>
-
+                    <div class="stat-card" id="smokeCard">
+                        <div class="stat-icon smoke-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+                                <path d="M12 12v9"/>
+                                <path d="M8 17l4 4 4-4"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Smoke</span>
+                            <span class="stat-value" id="smokeStatus">Waiting...</span>
+                        </div>
                     </div>
 
-                </div>
-
-                <div class="table-wrap">
-                    <table class="data-table" id="historyTable">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Source</th>
-                                <th>Risk</th>
-                                <th>Violations</th>
-                                <th>People</th>
-                                <th>Fire</th>
-                                <th>Smoke</th>
-                                <th>Evidence</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historyBody">
-                            <tr><td colspan="8" class="empty">Loading history…</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-            </section>
-
-        </section>
-
-
-        <!-- =================================================
-             STATISTICS
-        ================================================== -->
-
-        <section class="tab-panel" id="panel-statistics">
-
-            <section class="details-section">
-
-                <div class="section-header">
-
-                    <h2>Statistics</h2>
-
-                    <div class="controls">
-
-                        <select id="statsRange" class="select">
-                            <option value="24h">Last 24h</option>
-                            <option value="7d">Last 7 days</option>
-                            <option value="30d">Last 30 days</option>
-                            <option value="all">All time</option>
-                        </select>
-
-                        <button id="refreshStats" class="btn start">↻ Refresh</button>
-
+                    <div class="stat-card" id="peopleCard">
+                        <div class="stat-icon people-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">People</span>
+                            <span class="stat-value" id="personStatus">Waiting...</span>
+                        </div>
                     </div>
-
                 </div>
 
-                <div class="cards" id="statsCards">
-                    <p class="empty">Loading statistics…</p>
-                </div>
-
-                <h3 class="chart-title">Events by risk level</h3>
-                <div id="riskChart" class="bar-chart"></div>
-
-                <h3 class="chart-title">Top violation types</h3>
-                <div id="violationChart" class="bar-chart"></div>
-
-                <h3 class="chart-title">Events by day</h3>
-                <div id="dayChart" class="bar-chart"></div>
-
-            </section>
-
-        </section>
-
-
-        <!-- =================================================
-             EVIDENCE
-        ================================================== -->
-
-        <section class="tab-panel" id="panel-evidence">
-
-            <section class="details-section">
-
-                <div class="section-header">
-
-                    <h2>Evidence Gallery</h2>
-
-                    <div class="controls">
-                        <button id="refreshEvidence" class="btn start">↻ Refresh</button>
+                <!-- Current Detections -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <h3>Current Detections</h3>
+                            <p>Objects detected in the current frame</p>
+                        </div>
                     </div>
-
-                </div>
-
-                <div id="evidenceGallery" class="evidence-gallery">
-                    <p class="empty">Loading evidence…</p>
-                </div>
-
-            </section>
-
-        </section>
-
-
-        <!-- =================================================
-             REPORTS
-        ================================================== -->
-
-        <section class="tab-panel" id="panel-reports">
-
-            <section class="details-section">
-
-                <div class="section-header">
-
-                    <h2>Reports</h2>
-
-                    <div class="controls">
-
-                        <select id="reportRange" class="select">
-                            <option value="24h">Last 24h</option>
-                            <option value="7d">Last 7 days</option>
-                            <option value="30d">Last 30 days</option>
-                            <option value="all">All time</option>
-                        </select>
-
-                        <button id="generateReport" class="btn start">Generate</button>
-
-                        <a id="downloadJson" class="btn stop" href="#" download>JSON</a>
-                        <a id="downloadCsv" class="btn stop" href="#" download>CSV</a>
-
+                    <div id="detectionList" class="detection-list">
+                        <div class="empty-state">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            <p>No detections yet</p>
+                            <span>Start the camera to see live detections</span>
+                        </div>
                     </div>
-
                 </div>
-
-                <div id="reportSummary" class="report-summary">
-                    <p class="empty">Choose a range and click Generate.</p>
-                </div>
-
             </section>
 
-        </section>
+            <!-- Alerts Panel -->
+            <section class="tab-panel" id="panel-alerts">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <h3>Alert Feed</h3>
+                            <p>High and critical safety alerts</p>
+                        </div>
+                        <div class="card-actions">
+                            <select id="alertStatusFilter" class="select-input">
+                                <option value="">All statuses</option>
+                                <option value="new">New</option>
+                                <option value="acknowledged">Acknowledged</option>
+                            </select>
+                            <button id="refreshAlerts" class="btn btn-secondary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"/>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div id="alertsList" class="alert-list">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading alerts...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
-    </main>
+            <!-- History Panel -->
+            <section class="tab-panel" id="panel-history">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <h3>Event History</h3>
+                            <p>Complete log of safety events</p>
+                        </div>
+                        <div class="card-actions">
+                            <select id="historyRiskFilter" class="select-input">
+                                <option value="">All risk levels</option>
+                                <option value="LOW">LOW</option>
+                                <option value="MEDIUM">MEDIUM</option>
+                                <option value="HIGH">HIGH</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                            </select>
+                            <select id="historySourceFilter" class="select-input">
+                                <option value="">All sources</option>
+                                <option value="camera">Camera</option>
+                                <option value="video">Video</option>
+                                <option value="image">Image</option>
+                            </select>
+                            <button id="refreshHistory" class="btn btn-secondary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"/>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="historyTable">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Source</th>
+                                    <th>Risk</th>
+                                    <th>Violations</th>
+                                    <th>People</th>
+                                    <th>Fire</th>
+                                    <th>Smoke</th>
+                                    <th>Evidence</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyBody">
+                                <tr>
+                                    <td colspan="8">
+                                        <div class="loading-state">
+                                            <div class="spinner"></div>
+                                            <p>Loading history...</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
 
+            <!-- Statistics Panel -->
+            <section class="tab-panel" id="panel-statistics">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <h3>Statistics Overview</h3>
+                            <p>Aggregated safety metrics</p>
+                        </div>
+                        <div class="card-actions">
+                            <select id="statsRange" class="select-input">
+                                <option value="24h">Last 24 hours</option>
+                                <option value="7d">Last 7 days</option>
+                                <option value="30d">Last 30 days</option>
+                                <option value="all">All time</option>
+                            </select>
+                            <button id="refreshStats" class="btn btn-secondary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"/>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="stats-grid" id="statsCards">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading statistics...</p>
+                        </div>
+                    </div>
+                </div>
 
-    <!-- =====================================================
-         JAVASCRIPT
-    ====================================================== -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Events by Risk Level</h3>
+                    </div>
+                    <div id="riskChart" class="chart-container"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Top Violation Types</h3>
+                    </div>
+                    <div id="violationChart" class="chart-container"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Events by Day</h3>
+                    </div>
+                    <div id="dayChart" class="chart-container"></div>
+                </div>
+            </section>
+
+            <!-- Evidence Panel -->
+            <section class="tab-panel" id="panel-evidence">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <h3>Evidence Gallery</h3>
+                            <p>Captured snapshots and video clips from safety events</p>
+                        </div>
+                        <div class="card-actions">
+                            <button id="refreshEvidence" class="btn btn-secondary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"/>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div id="evidenceGallery" class="evidence-gallery">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading evidence...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports Panel -->
+            <section class="tab-panel" id="panel-reports">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <h3>Generate Report</h3>
+                            <p>Export safety data for analysis</p>
+                        </div>
+                        <div class="card-actions">
+                            <select id="reportRange" class="select-input">
+                                <option value="24h">Last 24 hours</option>
+                                <option value="7d">Last 7 days</option>
+                                <option value="30d">Last 30 days</option>
+                                <option value="all">All time</option>
+                            </select>
+                            <button id="generateReport" class="btn btn-primary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                                Generate
+                            </button>
+                            <a id="downloadJson" class="btn btn-outline" href="#" download>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                JSON
+                            </a>
+                            <a id="downloadCsv" class="btn btn-outline" href="#" download>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                CSV
+                            </a>
+                        </div>
+                    </div>
+                    <div id="reportSummary" class="report-summary">
+                        <div class="empty-state">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                            <p>Select a time range and click Generate</p>
+                            <span>Reports include event summaries and statistics</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Mobile Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <script src="app.js"></script>
-
 </body>
-
 </html>
