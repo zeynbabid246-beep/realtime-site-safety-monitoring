@@ -13,10 +13,13 @@ function getWebSocketUrl() {
 
 function getApiBase() {
     const proto = window.location.protocol;
-    if (proto === "http:" || proto === "https:") {
-        return window.location.origin;
+    let host = window.location.hostname;
+    if (!host || host === "") {
+        host = "127.0.0.1";
     }
-    return "http://127.0.0.1:8000";
+    // Always connect to the FastAPI backend on port 8000, even if the frontend
+    // is served from a different port (e.g., during development).
+    return `${proto}//${host}:8000`;
 }
 
 const API = getApiBase();
@@ -224,6 +227,9 @@ async function startCamera() {
         video.srcObject = cameraStream;
         await video.play();
 
+        const placeholder = document.getElementById("cameraPlaceholder");
+        if (placeholder) placeholder.style.display = "none";
+
         connectWebSocket();
 
         startButton.disabled = true;
@@ -370,6 +376,9 @@ function stopCamera() {
     }
 
     video.srcObject = null;
+
+    const placeholder = document.getElementById("cameraPlaceholder");
+    if (placeholder) placeholder.style.display = "";
 
     startButton.disabled = false;
     stopButton.disabled = true;
