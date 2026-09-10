@@ -319,6 +319,7 @@ def cluster_cones(
         min_samples=min_samples,
         cluster_selection_method="eom",
         allow_single_cluster=True,
+        copy=True,
     )
 
     labels = clusterer.fit_predict(points)

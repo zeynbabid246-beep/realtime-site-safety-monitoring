@@ -61,7 +61,7 @@ Plus one OPTIONAL, opt-in filter for FIXED cameras only:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # ============================================================
 # PER-CLASS CONFIDENCE THRESHOLDS

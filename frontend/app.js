@@ -8,8 +8,30 @@ function getWebSocketUrl() {
     if (!host || host === "") {
         host = "127.0.0.1";
     }
-    // Connect to backend server on port 8000
-    return `${protocol}//${host}:8000/ws/camera`;
+    // Connect to backend server on port 8000 (must match the FastAPI
+    // route in app/main.py: @app.websocket("/safety/ws/camera")).
+    return `${protocol}//${host}:8000/safety/ws/camera`;
+}
+
+function getApiBase() {
+    const proto = window.location.protocol;
+    if (proto === "http:" || proto === "https:") {
+        return window.location.origin;
+    }
+    return "http://127.0.0.1:8000";
+}
+
+const API = getApiBase();
+
+function apiUrl(path) {
+    return `${API}${path}`;
+}
+
+// Evidence files are served read-only from the /evidence StaticFiles mount;
+// the DB stores posix-relative paths under that directory.
+function evidenceUrl(relPath) {
+    if (!relPath) return null;
+    return apiUrl(`/evidence/${relPath}`);
 }
 
 
@@ -26,12 +48,16 @@ const stopButton = document.getElementById("stopButton");
 
 const connectionStatus = document.getElementById("connectionStatus");
 const cameraMessage = document.getElementById("cameraMessage");
+const riskBadge = document.getElementById("riskBadge");
 
 const ppeStatus = document.getElementById("ppeStatus");
 const fireStatus = document.getElementById("fireStatus");
 const smokeStatus = document.getElementById("smokeStatus");
 const personStatus = document.getElementById("personStatus");
 const detectionList = document.getElementById("detectionList");
+
+const alertBadge = document.getElementById("alertBadge");
+const alertBadgeCount = document.getElementById("alertBadgeCount");
 
 
 // ============================================================
@@ -41,14 +67,69 @@ const detectionList = document.getElementById("detectionList");
 let cameraStream = null;
 let socket = null;
 let sendingFrames = false;
+let activeTab = "dashboard";
+let pollTimer = null;
 
 
 // ============================================================
-// UI UPDATE HELPERS
+// SHARED HELPERS
+// ============================================================
+
+const RISK_COLORS = {
+    SAFE: "#16a34a",
+    LOW: "#ca8a04",
+    MEDIUM: "#ea580c",
+    HIGH: "#dc2626",
+    CRITICAL: "#b91c1c",
+};
+
+function fmtTime(ts) {
+    if (!ts) return "—";
+    const d = new Date(ts * 1000);
+    return d.toLocaleString();
+}
+
+function escapeHtml(value) {
+    return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function riskPill(level) {
+    const safe = escapeHtml(level || "SAFE");
+    return `<span class="risk-pill risk-${safe}">${safe}</span>`;
+}
+
+function violationSummary(counts) {
+    if (!counts || typeof counts !== "object") return "—";
+    const parts = Object.entries(counts)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => `${escapeHtml(k)}×${v}`);
+    return parts.length ? parts.join(", ") : "—";
+}
+
+async function getJson(path) {
+    const res = await fetch(apiUrl(path), { headers: { "Accept": "application/json" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+}
+
+
+// ============================================================
+// UI UPDATE HELPERS (live camera)
 // ============================================================
 
 function updateDetectionUI(summary, detections) {
     if (summary) {
+        if (riskBadge) {
+            const risk = summary.risk_level || "SAFE";
+            riskBadge.textContent = `RISK: ${risk}`;
+            riskBadge.style.color = RISK_COLORS[risk] || "#6b7280";
+        }
+
         if (summary.ppe_violations > 0) {
             ppeStatus.textContent = `⚠️ ${summary.ppe_violations} Violation(s)`;
             ppeStatus.style.color = "#dc2626";
@@ -88,7 +169,7 @@ function updateDetectionUI(summary, detections) {
         } else {
             detectionList.innerHTML = detections.map(d => `
                 <div class="detection">
-                    <strong>${d.class}</strong> (${(d.confidence * 100).toFixed(1)}%)
+                    <strong>${escapeHtml(d.class)}</strong> (${(d.confidence * 100).toFixed(1)}%)
                 </div>
             `).join("");
         }
@@ -101,34 +182,25 @@ function updateDetectionUI(summary, detections) {
 // ============================================================
 
 async function startCamera() {
-
     try {
-
         cameraMessage.textContent = "Requesting camera permission...";
 
-        // Get webcam stream
         cameraStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                width: 640,
-                height: 480
-            },
-            audio: false
+            video: { width: 640, height: 480 },
+            audio: false,
         });
 
         video.srcObject = cameraStream;
         await video.play();
 
-        // Connect WebSocket
         connectWebSocket();
 
         startButton.disabled = true;
         stopButton.disabled = false;
 
     } catch (error) {
-
         console.error("Camera error:", error);
         cameraMessage.textContent = "Could not access the camera.";
-
         alert("Camera access was denied or unavailable. Please check your camera permissions.");
     }
 }
@@ -139,15 +211,12 @@ async function startCamera() {
 // ============================================================
 
 function connectWebSocket() {
-
     const wsUrl = getWebSocketUrl();
     console.log("Connecting to WebSocket URL:", wsUrl);
 
     socket = new WebSocket(wsUrl);
 
-    // Connected
     socket.onopen = () => {
-
         console.log("WebSocket connected successfully.");
 
         connectionStatus.textContent = "● Connected";
@@ -160,9 +229,7 @@ function connectWebSocket() {
         sendFrame();
     };
 
-    // Receive message
     socket.onmessage = (event) => {
-
         if (typeof event.data === "string") {
             try {
                 const payload = JSON.parse(event.data);
@@ -185,7 +252,6 @@ function connectWebSocket() {
                 console.error("Error parsing WebSocket JSON message:", err);
             }
         } else if (event.data instanceof Blob) {
-
             const image = new Image();
             image.onload = () => {
                 canvas.width = image.width;
@@ -193,30 +259,21 @@ function connectWebSocket() {
                 ctx.drawImage(image, 0, 0);
                 URL.revokeObjectURL(image.src);
             };
-
             image.src = URL.createObjectURL(event.data);
         }
     };
 
-    // Error
     socket.onerror = (error) => {
-
         console.error("WebSocket error details:", error);
-
         cameraMessage.textContent = "WebSocket connection error! Please make sure the FastAPI server is running on http://127.0.0.1:8000.";
-
         connectionStatus.textContent = "● Error";
         connectionStatus.classList.remove("connected");
         connectionStatus.classList.add("disconnected");
     };
 
-    // Closed
     socket.onclose = (event) => {
-
         console.log("WebSocket disconnected.", event);
-
         sendingFrames = false;
-
         connectionStatus.textContent = "● Disconnected";
         connectionStatus.classList.remove("connected");
         connectionStatus.classList.add("disconnected");
@@ -229,10 +286,7 @@ function connectWebSocket() {
 // ============================================================
 
 function sendFrame() {
-
-    if (!sendingFrames) {
-        return;
-    }
+    if (!sendingFrames) return;
 
     if (!socket || socket.readyState !== WebSocket.OPEN) {
         if (socket && socket.readyState === WebSocket.CONNECTING) {
@@ -246,7 +300,6 @@ function sendFrame() {
         return;
     }
 
-    // Capture frame on temporary canvas
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = 640;
     tempCanvas.height = 480;
@@ -254,15 +307,11 @@ function sendFrame() {
     const tempContext = tempCanvas.getContext("2d");
     tempContext.drawImage(video, 0, 0, 640, 480);
 
-    // Convert frame to JPEG blob
     tempCanvas.toBlob(
         (blob) => {
-
             if (blob && socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(blob);
             }
-
-            // Schedule next frame (~10 FPS)
             if (sendingFrames) {
                 setTimeout(sendFrame, 100);
             }
@@ -278,27 +327,22 @@ function sendFrame() {
 // ============================================================
 
 function stopCamera() {
-
     console.log("Stopping camera...");
 
     sendingFrames = false;
 
-    // Stop webcam tracks
     if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
         cameraStream = null;
     }
 
-    // Close WebSocket
     if (socket) {
         socket.close();
         socket = null;
     }
 
-    // Clear video element
     video.srcObject = null;
 
-    // Reset UI
     startButton.disabled = false;
     stopButton.disabled = true;
 
@@ -313,6 +357,11 @@ function stopCamera() {
     personStatus.textContent = "Waiting...";
     personStatus.style.color = "";
 
+    if (riskBadge) {
+        riskBadge.textContent = "RISK: —";
+        riskBadge.style.color = "";
+    }
+
     detectionList.innerHTML = '<p class="empty">No detections yet.</p>';
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -320,9 +369,384 @@ function stopCamera() {
 
 
 // ============================================================
-// BUTTON EVENTS
+// TABS
+// ============================================================
+
+function switchTab(name) {
+    activeTab = name;
+
+    document.querySelectorAll(".tab").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.tab === name);
+    });
+    document.querySelectorAll(".tab-panel").forEach(panel => {
+        panel.classList.toggle("active", panel.id === `panel-${name}`);
+    });
+
+    refreshActiveTab();
+}
+
+function refreshActiveTab() {
+    switch (activeTab) {
+        case "alerts": return loadAlerts();
+        case "history": return loadHistory();
+        case "statistics": return loadStatistics();
+        case "evidence": return loadEvidence();
+        case "reports": return loadReport();
+        default: return Promise.resolve();
+    }
+}
+
+
+// ============================================================
+// ALERT BADGE (global)
+// ============================================================
+
+async function loadAlertBadge() {
+    try {
+        const data = await getJson("/api/alerts?limit=1&status=new");
+        const n = data.unacknowledged || 0;
+        if (n > 0) {
+            alertBadgeCount.textContent = n > 99 ? "99+" : String(n);
+            alertBadge.classList.remove("hidden");
+        } else {
+            alertBadge.classList.add("hidden");
+        }
+    } catch (err) {
+        console.debug("Alert badge poll failed:", err);
+    }
+}
+
+
+// ============================================================
+// ALERTS TAB
+// ============================================================
+
+async function loadAlerts() {
+    const list = document.getElementById("alertsList");
+    const status = document.getElementById("alertStatusFilter").value;
+    const qs = status ? `?status=${encodeURIComponent(status)}&limit=100` : "?limit=100";
+
+    try {
+        const data = await getJson(`/api/alerts${qs}`);
+        const alerts = data.alerts || [];
+
+        if (alerts.length === 0) {
+            list.innerHTML = '<p class="empty">No alerts in this view.</p>';
+            return;
+        }
+
+        list.innerHTML = alerts.map(a => {
+            const acked = a.status === "acknowledged";
+            const ackControl = acked
+                ? '<span class="alert-ack">✓ Acknowledged</span>'
+                : `<button class="btn start" data-ack="${a.id}">Acknowledge</button>`;
+            return `
+                <div class="alert-item level-${escapeHtml(a.level)}">
+                    <div class="alert-main">
+                        <div class="alert-title">${escapeHtml(a.title)}</div>
+                        <div class="alert-meta">
+                            ${riskPill(a.level)} · ${fmtTime(a.ts)} · ${escapeHtml(a.channel)}${a.notified ? " · sent" : ""}
+                        </div>
+                        <div class="alert-message">${escapeHtml(a.message)}</div>
+                    </div>
+                    <div>${ackControl}</div>
+                </div>
+            `;
+        }).join("");
+
+        list.querySelectorAll("button[data-ack]").forEach(btn => {
+            btn.addEventListener("click", () => ackAlert(parseInt(btn.dataset.ack, 10)));
+        });
+
+    } catch (err) {
+        list.innerHTML = `<p class="empty">Could not load alerts (${escapeHtml(err.message)}).</p>`;
+    }
+}
+
+async function ackAlert(id) {
+    try {
+        await fetch(apiUrl(`/api/alerts/${id}/ack`), { method: "POST" });
+        await Promise.all([loadAlerts(), loadAlertBadge()]);
+    } catch (err) {
+        console.error("Ack failed:", err);
+    }
+}
+
+
+// ============================================================
+// HISTORY TAB
+// ============================================================
+
+async function loadHistory() {
+    const body = document.getElementById("historyBody");
+    const risk = document.getElementById("historyRiskFilter").value;
+    const source = document.getElementById("historySourceFilter").value;
+
+    const params = new URLSearchParams({ limit: "200" });
+    if (risk) params.set("risk", risk);
+    if (source) params.set("source", source);
+
+    try {
+        const data = await getJson(`/api/events?${params.toString()}`);
+        const events = data.events || [];
+
+        if (events.length === 0) {
+            body.innerHTML = '<tr><td colspan="8" class="empty">No events recorded.</td></tr>';
+            return;
+        }
+
+        body.innerHTML = events.map(e => {
+            const img = e.evidence_image ? `<a class="thumb-link" href="${evidenceUrl(e.evidence_image)}" target="_blank" rel="noopener">img</a>` : "";
+            const clip = e.evidence_clip ? `<a class="thumb-link" href="${evidenceUrl(e.evidence_clip)}" target="_blank" rel="noopener">clip</a>` : "";
+            const evidence = [img, clip].filter(Boolean).join(" · ") || "—";
+            return `
+                <tr>
+                    <td>${fmtTime(e.ts)}</td>
+                    <td>${escapeHtml(e.source)}</td>
+                    <td>${riskPill(e.risk_level)}</td>
+                    <td>${escapeHtml(violationSummary(e.violation_counts))}</td>
+                    <td>${e.persons ?? 0}</td>
+                    <td>${e.fire ?? 0}</td>
+                    <td>${e.smoke ?? 0}</td>
+                    <td>${evidence}</td>
+                </tr>
+            `;
+        }).join("");
+
+    } catch (err) {
+        body.innerHTML = `<tr><td colspan="8" class="empty">Could not load history (${escapeHtml(err.message)}).</td></tr>`;
+    }
+}
+
+
+// ============================================================
+// STATISTICS TAB
+// ============================================================
+
+function barChart(container, entries, colorFn) {
+    const el = document.getElementById(container);
+    const items = entries.filter(([, v]) => v > 0);
+
+    if (items.length === 0) {
+        el.innerHTML = '<p class="empty">No data in this range.</p>';
+        return;
+    }
+
+    const max = Math.max(...items.map(([, v]) => v));
+
+    el.innerHTML = items.map(([label, value]) => {
+        const pct = max > 0 ? (value / max) * 100 : 0;
+        const color = colorFn ? colorFn(label) : "#2563eb";
+        return `
+            <div class="bar-row">
+                <div class="bar-label" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
+                <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+                <div class="bar-value">${value}</div>
+            </div>
+        `;
+    }).join("");
+}
+
+async function loadStatistics() {
+    const cards = document.getElementById("statsCards");
+    const range = document.getElementById("statsRange").value;
+
+    try {
+        const r = await getJson(`/api/statistics?range=${encodeURIComponent(range)}`);
+        const t = r.totals || {};
+
+        cards.innerHTML = [
+            ["Events", t.events ?? 0],
+            ["Alerts", t.alerts ?? 0],
+            ["Unacked alerts", t.alerts_unacknowledged ?? 0],
+            ["Frames processed", t.frames_processed ?? 0],
+            ["With snapshot", t.events_with_image ?? 0],
+            ["With clip", t.events_with_clip ?? 0],
+        ].map(([label, value]) => `
+            <div class="card stat-card">
+                <div class="stat-value">${value}</div>
+                <div class="stat-label">${escapeHtml(label)}</div>
+            </div>
+        `).join("");
+
+        const riskOrder = ["SAFE", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
+        barChart("riskChart", riskOrder.map(k => [k, (r.by_risk || {})[k] || 0]),
+            label => RISK_COLORS[label] || "#2563eb");
+
+        barChart("violationChart", Object.entries(r.by_violation_type || {}).slice(0, 10));
+        barChart("dayChart", Object.entries(r.by_day || {}));
+
+    } catch (err) {
+        cards.innerHTML = `<p class="empty">Could not load statistics (${escapeHtml(err.message)}).</p>`;
+    }
+}
+
+
+// ============================================================
+// EVIDENCE TAB
+// ============================================================
+
+async function loadEvidence() {
+    const gallery = document.getElementById("evidenceGallery");
+
+    try {
+        const data = await getJson("/api/evidence?limit=60");
+        const items = data.evidence || [];
+
+        if (items.length === 0) {
+            gallery.innerHTML = '<p class="empty">No evidence captured yet. Evidence is saved on HIGH/CRITICAL events.</p>';
+            return;
+        }
+
+        gallery.innerHTML = items.map(it => {
+            let media;
+            if (it.clip) {
+                media = `<video class="evidence-media" src="${evidenceUrl(it.clip)}" controls muted></video>`;
+            } else if (it.image) {
+                media = `<img class="evidence-media" src="${evidenceUrl(it.image)}" alt="event ${it.event_id}" loading="lazy">`;
+            } else {
+                media = "";
+            }
+            return `
+                <div class="evidence-card">
+                    ${media}
+                    <div class="evidence-body">
+                        <div class="ev-head">
+                            ${riskPill(it.risk_level)}
+                            <span>${escapeHtml(it.source)}</span>
+                        </div>
+                        <div>#${it.event_id} · ${fmtTime(it.ts)}</div>
+                        <div>${escapeHtml(violationSummary(it.violation_counts))}</div>
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+    } catch (err) {
+        gallery.innerHTML = `<p class="empty">Could not load evidence (${escapeHtml(err.message)}).</p>`;
+    }
+}
+
+
+// ============================================================
+// REPORTS TAB
+// ============================================================
+
+function kv(label, value) {
+    return `<div class="kv"><div class="k">${escapeHtml(label)}</div><div class="v">${value}</div></div>`;
+}
+
+async function loadReport() {
+    const summary = document.getElementById("reportSummary");
+    const range = document.getElementById("reportRange").value;
+
+    // Wire the download links to the current range.
+    document.getElementById("downloadJson").href =
+        apiUrl(`/api/reports/download?range=${encodeURIComponent(range)}&format=json`);
+    document.getElementById("downloadCsv").href =
+        apiUrl(`/api/reports/download?range=${encodeURIComponent(range)}&format=csv`);
+
+    try {
+        const r = await getJson(`/api/reports?range=${encodeURIComponent(range)}`);
+        const t = r.totals || {};
+
+        const topRows = (r.top_events || []).map(e => `
+            <tr>
+                <td>${fmtTime(e.ts)}</td>
+                <td>${escapeHtml(e.source)}</td>
+                <td>${riskPill(e.risk_level)}</td>
+                <td>${e.violation_count ?? 0}</td>
+                <td>${escapeHtml(violationSummary(e.violation_counts))}</td>
+            </tr>
+        `).join("");
+
+        summary.innerHTML = `
+            <div class="report-block">
+                <h3>Totals (${escapeHtml(r.range)})</h3>
+                <div class="kv-grid">
+                    ${kv("Events", t.events ?? 0)}
+                    ${kv("Alerts", t.alerts ?? 0)}
+                    ${kv("Acknowledged", t.alerts_acknowledged ?? 0)}
+                    ${kv("Unacknowledged", t.alerts_unacknowledged ?? 0)}
+                    ${kv("Frames", t.frames_processed ?? 0)}
+                    ${kv("Snapshots", t.events_with_image ?? 0)}
+                    ${kv("Clips", t.events_with_clip ?? 0)}
+                </div>
+            </div>
+
+            <div class="report-block">
+                <h3>By source</h3>
+                <div class="kv-grid">
+                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<p class="empty">No data.</p>'}
+                </div>
+            </div>
+
+            <div class="report-block">
+                <h3>Most severe events</h3>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Time</th><th>Source</th><th>Risk</th><th>Violations</th><th>Detail</th></tr>
+                        </thead>
+                        <tbody>${topRows || '<tr><td colspan="5" class="empty">No events.</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+    } catch (err) {
+        summary.innerHTML = `<p class="empty">Could not generate report (${escapeHtml(err.message)}).</p>`;
+    }
+}
+
+
+// ============================================================
+// POLLING
+// ============================================================
+
+function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => {
+        loadAlertBadge();
+        // Keep data-heavy tabs fresh only while they're visible.
+        if (activeTab === "alerts") loadAlerts();
+        else if (activeTab === "history") loadHistory();
+        else if (activeTab === "statistics") loadStatistics();
+    }, 10000);
+}
+
+
+// ============================================================
+// EVENT WIRING
 // ============================================================
 
 startButton.addEventListener("click", startCamera);
 stopButton.addEventListener("click", stopCamera);
-stopButton.addEventListener("click", stopCamera);
+
+document.getElementById("tabs").addEventListener("click", (e) => {
+    const btn = e.target.closest(".tab");
+    if (btn) switchTab(btn.dataset.tab);
+});
+
+document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);
+document.getElementById("alertStatusFilter").addEventListener("change", loadAlerts);
+
+document.getElementById("refreshHistory").addEventListener("click", loadHistory);
+document.getElementById("historyRiskFilter").addEventListener("change", loadHistory);
+document.getElementById("historySourceFilter").addEventListener("change", loadHistory);
+
+document.getElementById("refreshStats").addEventListener("click", loadStatistics);
+document.getElementById("statsRange").addEventListener("change", loadStatistics);
+
+document.getElementById("refreshEvidence").addEventListener("click", loadEvidence);
+
+document.getElementById("generateReport").addEventListener("click", loadReport);
+document.getElementById("reportRange").addEventListener("change", loadReport);
+
+
+// ============================================================
+// INIT
+// ============================================================
+
+loadAlertBadge();
+startPolling();

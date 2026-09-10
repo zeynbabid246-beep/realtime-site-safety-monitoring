@@ -18,6 +18,7 @@ Detection dict format:
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -52,17 +53,23 @@ class FireDetector:
         self.device = device
         self.class_names: Dict[int, str] = self.model.names
 
+        # Shared across concurrent video jobs / websocket clients; serialise
+        # forward passes because ultralytics inference is not thread-safe on a
+        # single model object.
+        self._lock = threading.RLock()
+
     def predict(self, frame: np.ndarray) -> List[Dict[str, Any]]:
         """Run detection on a single frame. Fire/smoke doesn't need tracking."""
 
         try:
-            results = self.model.predict(
-                source=frame,
-                conf=self.confidence,
-                imgsz=self.image_size,
-                device=self.device,
-                verbose=False,
-            )
+            with self._lock:
+                results = self.model.predict(
+                    source=frame,
+                    conf=self.confidence,
+                    imgsz=self.image_size,
+                    device=self.device,
+                    verbose=False,
+                )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Fire/smoke inference failed on frame: %s", exc)
             return []

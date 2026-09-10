@@ -24,6 +24,7 @@ An intelligent, real-time computer vision and spatial intelligence platform desi
   - [2. Offline Video Safety Analysis CLI](#2-offline-video-safety-analysis-cli)
   - [3. Real-Time Webcam / RTSP Stream CLI](#3-real-time-webcam--rtsp-stream-cli)
   - [4. REST API Image & Video Endpoints](#4-rest-api-image--video-endpoints)
+- [Environment Configuration](#️-environment-configuration)
 - [Configuration Reference](#-configuration-reference)
 - [Input & Output Specifications](#-input--output-specifications)
 - [Detection Classes & Hazard Categories](#-detection-classes--hazard-categories)
@@ -36,7 +37,7 @@ An intelligent, real-time computer vision and spatial intelligence platform desi
 
 ## 🚀 Quick Start
 
-Run the entire safety platform in four copy-pasteable commands:
+Run the entire safety platform in five copy-pasteable commands:
 
 ```bash
 # 1. Clone the repository
@@ -53,12 +54,16 @@ source venv/bin/activate
 # 3. Install required dependencies
 pip install -r requirements.txt
 
-# 4. Launch the web platform and API
+# 4. Configure environment (optional - defaults work for basic usage)
+cp .env.example .env
+# Edit .env to enable Telegram alerts or customize thresholds
+
+# 5. Launch the web platform and API
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Open your browser and navigate to:
-👉 **`http://127.0.0.1:8000`** — Live interactive camera dashboard & hazard analytics.  
+👉 **`http://127.0.0.1:8000`** — Live interactive dashboard with camera, alerts, history, statistics, evidence, and reports.
 👉 **`http://127.0.0.1:8000/docs`** — Interactive Swagger API documentation.
 
 ---
@@ -92,6 +97,10 @@ This system provides automated, continuous optical surveillance for job sites by
 | **Temporal Zone Stabilization** | `DangerZoneTracker` stabilizes cone cluster polygons across video frames with polygon IoU matching, eliminating flickering zone IDs. |
 | **Ground-Point Distance** | Calculates Euclidean distance from the bottom-center contact points of bounding boxes to approximate actual ground plane proximity. |
 | **Full Web Application** | FastAPI backend with WebSocket streaming (`/safety/ws/camera`) and modern responsive frontend dashboard with live camera controls and real-time alert counters. |
+| **Persistent Monitoring** | SQLite storage records all safety events with cooldown-bounded deduplication. Dashboard, alerts, history, statistics, evidence gallery, and CSV reports. |
+| **Alert System** | HIGH/CRITICAL events trigger in-dashboard alerts and optional Telegram push notifications with annotated snapshots. |
+| **Evidence Capture** | Automatic annotated JPEG snapshots and rolling pre-buffer MP4 clips on HIGH/CRITICAL violations, with bounded storage and auto-pruning. |
+| **Multi-Tab Dashboard** | Vanilla JS SPA with live camera, alerts feed, event history, statistics charts, evidence gallery, and downloadable reports. |
 | **Detailed CSV Logging** | Exports comprehensive frame-by-frame risk indices, active violation counts, and hazard categories for post-job safety audits. |
 
 ---
@@ -116,53 +125,75 @@ This system provides automated, continuous optical surveillance for job sites by
 
 ```text
 construction_safety_system/
-├── app/                                 # FastAPI application and API routes
+├── app/                                 # FastAPI application and backend services
 │   ├── __init__.py
-│   └── main.py                          # Core server: REST endpoints, WebSocket handler, static mount
-├── data/                                # Data storage for media and outputs
+│   ├── main.py                          # Core server: REST endpoints, WebSocket, static mounts
+│   ├── alerting.py                      # Alert engine with Dashboard feed + Telegram push
+│   ├── evidence.py                      # Snapshot + clip recorder for HIGH/CRITICAL events
+│   ├── monitor.py                       # SafetyMonitor: per-stream orchestrator
+│   ├── reports.py                       # Time-range aggregation and CSV export
+│   ├── settings.py                      # Configuration from environment variables
+│   └── storage.py                       # Thread-safe SQLite persistence layer
+├── data/                                # Runtime data (auto-created)
+│   ├── safety.db                        # SQLite database (events, alerts, counters)
+│   ├── evidence/                        # Captured snapshots and video clips
 │   ├── images/                          # Sample test images
 │   ├── output/                          # Output directory
 │   │   └── videos/                      # Generated annotated videos and CSV reports
 │   └── videos/                          # Benchmark and test video recordings
+├── docs/                                # Documentation
+│   └── DETECTION_LIMITATIONS.md         # Code-fixable vs model-bound limitations
 ├── frontend/                            # Web dashboard user interface
-│   ├── app.js                           # WebSocket camera feed handler and DOM updater
+│   ├── app.js                           # Multi-tab SPA: Dashboard, Alerts, History, Stats, Evidence, Reports
 │   ├── index.html                       # Real-time monitoring dashboard layout
 │   └── style.css                        # Modern dark-mode theme styling
 ├── models/                              # Trained YOLO model weights (.pt files)
 │   ├── fire_smoke/
 │   │   └── best.pt                      # Fire & Smoke detection model (classes: Fire, Smoke)
-│   ├── hazard/
-│   │   └── best.pt                      # Unified hazard model (workers, PPE, cones, machines, poles)
-│   ├── machine/
-│   │   └── best.pt                      # Heavy machinery model (excavator, crane, mixer, etc.)
-│   └── ppe/
-│       └── best.pt                      # Standalone PPE model (helmet, vest, boots, gloves, goggles)
+│   └── hazard/
+│       └── best.pt                      # Unified hazard model (workers, PPE, cones, machines, poles)
 ├── scripts/                             # Standalone command-line utilities
 │   ├── analyze_video.py                 # Offline video analysis with CSV export and filter telemetry
 │   └── live_webcam.py                   # Direct OpenCV webcam / camera streaming utility
 ├── src/                                 # Core business logic and safety algorithms
+│   ├── pipeline.py                      # Shared SafetyPipeline: single per-frame code path
 │   ├── fire/                            # Fire & smoke detection module
+│   │   ├── __init__.py
 │   │   ├── config.py                    # Fire model configuration
 │   │   ├── fire_confirmation.py         # Multi-frame IoU persistence debouncer for fire/smoke
 │   │   └── fire_detector.py             # Inference wrapper around fire/smoke YOLO model
 │   ├── hazard/                          # Hazard and worker detection module
+│   │   ├── __init__.py
 │   │   ├── detection_filter.py          # Resolution-aware, perspective-aware, and aspect-ratio filter
 │   │   ├── hazard_detector.py           # Inference wrapper with ByteTrack tracking integration
 │   │   └── track_confirmation.py        # Track hit buffer + StaticPersonFilter motion analyzer
 │   ├── machine/                         # Heavy machinery module
 │   │   └── machine_detector.py          # Heavy equipment inference wrapper
 │   └── safety/                          # Central safety rules and geometry engine
+│       ├── __init__.py
 │       ├── distance_calculator.py       # Ground-contact proximity calculation
 │       ├── geometry.py                  # HDBSCAN cone clustering, Shapely polygons, DangerZoneTracker
 │       ├── overlay.py                   # High-contrast visual annotation and risk status banner
 │       ├── rules.py                     # SafetyConfig, PPE/zone/proximity rules, risk assessment
 │       └── safety_engine.py             # Central orchestrator combining all hazard subsystems
-├── test_danger_zone_video.py            # Danger zone integration test script
-├── test_detection_filter.py             # Unit test suite for detection filtering and motion checks
-├── test_distance_video.py               # Worker-machine proximity integration test
-├── test_fire_confirmation.py            # Unit test for fire temporal debounce gate
-├── test_geometry.py                     # Unit test for HDBSCAN clustering and polygon creation
-├── test_safety_engine.py                # End-to-end integration test for SafetyEngine
+├── tests/                               # Pytest test suite (120+ model-free unit tests)
+│   ├── conftest.py                      # Test fixtures and helpers
+│   ├── test_alerting.py                 # Alert engine tests
+│   ├── test_detection_filter.py         # Detection filter tests
+│   ├── test_distance.py                 # Distance calculator tests
+│   ├── test_evidence.py                 # Evidence capture tests
+│   ├── test_fire_confirmation.py        # Fire temporal debounce tests
+│   ├── test_geometry.py                 # HDBSCAN clustering tests
+│   ├── test_monitor.py                  # SafetyMonitor orchestrator tests
+│   ├── test_pipeline.py                 # Shared pipeline tests
+│   ├── test_reports.py                  # Reports module tests
+│   ├── test_rules.py                    # Safety rules tests
+│   ├── test_safety_engine.py            # Safety engine tests
+│   ├── test_storage.py                  # SQLite storage tests
+│   └── test_track_confirmation.py       # Track confirmation tests
+├── .env.example                         # Environment configuration template
+├── .gitignore                           # Git ignore rules
+├── pytest.ini                           # Pytest configuration
 ├── requirements.txt                     # Project dependencies
 └── README.md                            # Official documentation
 ```
@@ -216,32 +247,62 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 
 ## 🧠 Model & Weights Setup
 
-All weights are pre-configured in the `models/` directory:
+The system uses two YOLO models, both pre-configured in the `models/` directory:
 
 | Model File | Target Classes | Description |
 |---|---|---|
-| `models/hazard/best.pt` | `Hardhat`, `Mask`, `NO-Hardhat`, `NO-Mask`, `NO-Safety Vest`, `Person`, `Safety Cone`, `Safety Vest`, `machinery`, `utility pole`, `vehicle` | Primary multi-hazard detector with tracking. |
-| `models/fire_smoke/best.pt` | `Fire`, `Smoke` | Specialized model for thermal and combustion hazards. |
-| `models/machine/best.pt` | `excavator`, `dump_truck`, `bulldozer`, `wheel_loader`, `mobile_crane`, `tower_crane`, `roller_compactor`, `cement_mixer` | Granular classification of construction machinery. |
-| `models/ppe/best.pt` | `helmet`, `gloves`, `vest`, `boots`, `goggles`, `none`, `Person`, `no_helmet`, `no_goggle`, `no_gloves`, `no_boots` | Granular multi-class PPE audit model. |
+| `models/hazard/best.pt` | `Hardhat`, `Mask`, `NO-Hardhat`, `NO-Mask`, `NO-Safety Vest`, `Person`, `Safety Cone`, `Safety Vest`, `machinery`, `utility pole`, `vehicle` | Primary multi-hazard detector with ByteTrack tracking. Covers workers, PPE compliance, cones, machinery, and poles in a single model. |
+| `models/fire_smoke/best.pt` | `Fire`, `Smoke` | Specialized model for thermal and combustion hazards with temporal debouncing. |
+
+Both models are loaded once at server startup and shared across all streams (REST endpoints, WebSocket camera, video jobs). They serialize their own forward passes behind an internal lock, so concurrent requests never race on the shared model object.
 
 ---
 
 ## 🚦 How to Run the System
 
-### 1. Web Application & Live Dashboard (FastAPI)
-Launches the web server serving the frontend UI, REST API, and WebSocket streaming:
+### 1. Web Application & Live Dashboard (Recommended)
 
+The web application provides a full-featured dashboard with live camera streaming, real-time alerts, event history, statistics, evidence gallery, and reports.
+
+**Start the server:**
 ```bash
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-- Open **`http://127.0.0.1:8000`** in Google Chrome or Edge.
-- Click **"Start Live Camera"** to stream your webcam directly through the real-time AI safety pipeline.
+**Open your browser:**
+- **Dashboard**: `http://127.0.0.1:8000` — Multi-tab interface with live camera, alerts, history, statistics, evidence, and reports
+- **API Documentation**: `http://127.0.0.1:8000/docs` — Interactive Swagger UI for all REST endpoints
+
+#### Using Live Webcam in the Dashboard
+
+1. Navigate to `http://127.0.0.1:8000`
+2. Click the **"Dashboard"** tab (default)
+3. Click **"Start Live Camera"** button
+4. Grant camera permission when prompted by your browser
+5. The live feed processes through the full AI safety pipeline in real-time
+6. Violations are automatically recorded to the database
+7. HIGH/CRITICAL events trigger alerts and capture evidence (snapshots + clips)
+
+**What happens during live streaming:**
+- Every frame runs through hazard detection, fire/smoke detection, PPE checking, proximity analysis, and danger zone monitoring
+- Risk levels are calculated per frame (SAFE → LOW → MEDIUM → HIGH → CRITICAL)
+- Events are recorded to SQLite with cooldown-bounded deduplication
+- Annotated JPEG snapshots and short MP4 clips are saved for HIGH/CRITICAL events
+- Alerts appear in the Alerts tab and can be pushed to Telegram (if configured)
+- Statistics update in real-time across all dashboard tabs
+
+**Dashboard tabs:**
+- **Dashboard**: Live camera feed with real-time risk indicators
+- **Alerts**: Feed of HIGH/CRITICAL alerts with acknowledgment
+- **History**: Searchable event log with risk/source filters
+- **Statistics**: Time-range aggregates with bar charts
+- **Evidence**: Gallery of captured snapshots and video clips
+- **Reports**: Downloadable CSV reports with event summaries
 
 ---
 
 ### 2. Offline Video Safety Analysis CLI
+
 Processes an existing video file on disk, applies detection filters, tracks entities, evaluates danger zones and proximity, and renders an annotated video plus CSV log:
 
 ```bash
@@ -263,19 +324,28 @@ python scripts/analyze_video.py \
 
 ---
 
-### 3. Real-Time Webcam / RTSP Stream CLI
-Runs direct OpenCV video capture without web dependencies. Press `Q` to exit:
+### 3. Real-Time Webcam / RTSP Stream CLI (Standalone)
+
+Runs direct OpenCV video capture without web dependencies. This is a lightweight alternative to the web dashboard for quick testing. Press `Q` to exit:
 
 ```bash
 # Default camera (index 0)
 python scripts/live_webcam.py
 
-# Specify camera index or RTSP stream URL
+# Specify camera index (e.g., second camera)
 python scripts/live_webcam.py --camera 1
+
+# RTSP stream from IP camera
+python scripts/live_webcam.py --camera "rtsp://admin:password@192.168.1.100:554/stream"
 
 # Run hazard model only (skip fire model for speed)
 python scripts/live_webcam.py --camera 0 --skip-fire
+
+# Adjust confidence thresholds
+python scripts/live_webcam.py --camera 0 --hazard-conf 0.30 --fire-conf 0.25
 ```
+
+**Note:** This standalone script does NOT record events to the database or capture evidence. For full monitoring with persistence, use the web dashboard (option 1).
 
 ---
 
@@ -297,6 +367,50 @@ curl -X POST "http://127.0.0.1:8000/safety/detect/video" \
      -F "file=@data/videos/test1.mp4" \
      --output "annotated_video.mp4"
 ```
+
+---
+
+## ⚙️ Environment Configuration
+
+Copy `.env.example` to `.env` and customize:
+
+```bash
+cp .env.example .env
+```
+
+**Key configuration options:**
+
+```bash
+# Storage paths
+SAFETY_DB_PATH=data/safety.db
+SAFETY_EVIDENCE_DIR=data/evidence
+
+# Risk thresholds (SAFE < LOW < MEDIUM < HIGH < CRITICAL)
+SAFETY_RECORD_MIN_RISK=LOW          # Minimum risk to record event
+SAFETY_ALERT_MIN_RISK=HIGH          # Minimum risk to trigger alert
+SAFETY_EVIDENCE_MIN_RISK=HIGH       # Minimum risk to capture snapshot/clip
+
+# Cooldowns (seconds) - prevent spam
+SAFETY_EVENT_COOLDOWN_S=10
+SAFETY_ALERT_COOLDOWN_S=60
+SAFETY_EVIDENCE_COOLDOWN_S=30
+
+# Video clip recording
+SAFETY_CLIP_PRE_FRAMES=30           # Frames to keep before trigger
+SAFETY_CLIP_POST_FRAMES=60          # Frames to record after trigger
+SAFETY_CLIP_FPS=10
+
+# Pruning (auto-cleanup old data)
+SAFETY_MAX_EVIDENCE_FILES=1000
+SAFETY_MAX_EVENTS=10000
+
+# Telegram alerts (optional)
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+SAFETY_TELEGRAM_ENABLED=true
+```
+
+**Important:** Never commit `.env` to git. It's already in `.gitignore`.
 
 ---
 
@@ -462,14 +576,23 @@ curl -X POST "http://127.0.0.1:8000/safety/detect/video" \
 ```text
 Hazard Model Weights   : models/hazard/best.pt
 Fire/Smoke Weights     : models/fire_smoke/best.pt
-Machinery Weights      : models/machine/best.pt
-PPE Model Weights      : models/ppe/best.pt
 Core FastAPI App       : app/main.py
+Alert Engine           : app/alerting.py
+Evidence Capture       : app/evidence.py
+Safety Monitor         : app/monitor.py
+Reports Module         : app/reports.py
+Settings               : app/settings.py
+SQLite Storage         : app/storage.py
+Shared Pipeline        : src/pipeline.py
 Video Batch Script     : scripts/analyze_video.py
 Live Webcam Script     : scripts/live_webcam.py
 Detection Filter Logic : src/hazard/detection_filter.py
 Tracking & Debouncing  : src/hazard/track_confirmation.py
 Web Dashboard Assets   : frontend/ (index.html, app.js, style.css)
+Test Suite             : tests/ (120+ model-free unit tests)
+Environment Config     : .env (copy from .env.example)
+SQLite Database        : data/safety.db (auto-created)
+Evidence Storage       : data/evidence/ (auto-created)
 Default Output Videos  : data/output/videos/
 ```
 

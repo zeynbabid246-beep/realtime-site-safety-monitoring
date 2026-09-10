@@ -160,13 +160,22 @@ class SafetyEngine:
 
         if self.zone_tracker is not None:
             stabilized = self.zone_tracker.update(raw_zones)
-            danger_zone_polygons = [z["polygon"] for z in stabilized]
+            # Only zones still "active" (re-detected this frame, or missed
+            # within the short grace window that bridges cone flicker)
+            # count as live hazards. Stale zones whose cones were genuinely
+            # removed keep their id inside the tracker for continuity but
+            # stop trapping people / being drawn as danger.
+            active_zones = [
+                z for z in stabilized
+                if z.get("missed", 0) <= config.zone_presence_grace_frames
+            ]
+            danger_zone_polygons = [z["polygon"] for z in active_zones]
             # find_people_inside_zones matches by position in the list
             # it's given, so map that position back to the persistent id.
             zone_id_by_index = {
-                index: z["zone_id"] for index, z in enumerate(stabilized)
+                index: z["zone_id"] for index, z in enumerate(active_zones)
             }
-            danger_zones_meta = stabilized
+            danger_zones_meta = active_zones
         else:
             danger_zone_polygons = raw_zones
             danger_zones_meta = [
@@ -198,6 +207,7 @@ class SafetyEngine:
         distance_results = calculate_person_machine_distances(
             persons=persons,
             machines=machines,
+            assumed_person_height_m=config.assumed_person_height_m,
         )
 
         # ====================================================
@@ -291,6 +301,8 @@ class SafetyEngine:
             "pole_results": pole_results,
             "fire_detections": fire_detections,
             "proximity_threshold_px": config.machine_distance_threshold,
+            "use_perspective_distance": config.use_perspective_distance,
+            "machine_distance_threshold_m": config.machine_distance_threshold_m,
             "statistics": {
                 "persons": len(persons),
                 "machines": len(machines),

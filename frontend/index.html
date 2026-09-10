@@ -33,18 +33,46 @@
             </h1>
 
             <p>
-                Real-time PPE & Fire/Smoke Detection
+                Real-time PPE &amp; Fire/Smoke Detection
             </p>
         </div>
 
-        <div
-            id="connectionStatus"
-            class="status disconnected"
-        >
-            ● Disconnected
+        <div class="header-right">
+
+            <div
+                id="alertBadge"
+                class="alert-badge hidden"
+                title="Unacknowledged alerts"
+            >
+                🔔 <span id="alertBadgeCount">0</span>
+            </div>
+
+            <div
+                id="connectionStatus"
+                class="status disconnected"
+            >
+                ● Disconnected
+            </div>
+
         </div>
 
     </header>
+
+
+    <!-- =====================================================
+         TAB NAV
+    ====================================================== -->
+
+    <nav class="tabs" id="tabs">
+
+        <button class="tab active" data-tab="dashboard">Dashboard</button>
+        <button class="tab" data-tab="alerts">Alerts</button>
+        <button class="tab" data-tab="history">History</button>
+        <button class="tab" data-tab="statistics">Statistics</button>
+        <button class="tab" data-tab="evidence">Evidence</button>
+        <button class="tab" data-tab="reports">Reports</button>
+
+    </nav>
 
 
     <!-- =====================================================
@@ -54,204 +82,371 @@
     <main class="container">
 
         <!-- =================================================
-             CAMERA SECTION
+             DASHBOARD (live camera)
         ================================================== -->
 
-        <section class="camera-section">
+        <section class="tab-panel active" id="panel-dashboard">
 
-            <div class="section-header">
+            <section class="camera-section">
 
-                <h2>
-                    Live Camera
-                </h2>
+                <div class="section-header">
 
-                <div class="controls">
+                    <h2>
+                        Live Camera
+                    </h2>
 
-                    <button
-                        id="startButton"
-                        class="btn start"
+                    <div class="controls">
+
+                        <button
+                            id="startButton"
+                            class="btn start"
+                        >
+                            ▶ Start Camera
+                        </button>
+
+                        <button
+                            id="stopButton"
+                            class="btn stop"
+                            disabled
+                        >
+                            ■ Stop Camera
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <div class="camera-container">
+
+                    <!-- Original webcam -->
+
+                    <video
+                        id="camera"
+                        autoplay
+                        playsinline
+                        muted
                     >
-                        ▶ Start Camera
-                    </button>
+                    </video>
 
-                    <button
-                        id="stopButton"
-                        class="btn stop"
-                        disabled
+
+                    <!-- Detection result -->
+
+                    <canvas
+                        id="resultCanvas"
                     >
-                        ■ Stop Camera
-                    </button>
+                    </canvas>
 
                 </div>
 
-            </div>
 
-
-            <!-- Camera / Detection -->
-
-            <div class="camera-container">
-
-                <!-- Original webcam -->
-
-                <video
-                    id="camera"
-                    autoplay
-                    playsinline
-                    muted
+                <p
+                    id="cameraMessage"
+                    class="camera-message"
                 >
-                </video>
-
-
-                <!-- Detection result -->
-
-                <canvas
-                    id="resultCanvas"
-                >
-                </canvas>
-
-            </div>
-
-
-            <p
-                id="cameraMessage"
-                class="camera-message"
-            >
-                Click "Start Camera" to begin detection.
-            </p>
-
-        </section>
-
-
-        <!-- =================================================
-             DETECTION STATUS
-        ================================================== -->
-
-        <section class="detections-section">
-
-            <h2>
-                Detection Status
-            </h2>
-
-
-            <div class="cards">
-
-
-                <!-- PPE -->
-
-                <div class="card">
-
-                    <div class="card-icon">
-                        🦺
-                    </div>
-
-                    <div class="card-content">
-
-                        <h3>
-                            PPE
-                        </h3>
-
-                        <p id="ppeStatus">
-                            Waiting...
-                        </p>
-
-                    </div>
-
-                </div>
-
-
-                <!-- FIRE -->
-
-                <div class="card">
-
-                    <div class="card-icon">
-                        🔥
-                    </div>
-
-                    <div class="card-content">
-
-                        <h3>
-                            Fire
-                        </h3>
-
-                        <p id="fireStatus">
-                            Waiting...
-                        </p>
-
-                    </div>
-
-                </div>
-
-
-                <!-- SMOKE -->
-
-                <div class="card">
-
-                    <div class="card-icon">
-                        💨
-                    </div>
-
-                    <div class="card-content">
-
-                        <h3>
-                            Smoke
-                        </h3>
-
-                        <p id="smokeStatus">
-                            Waiting...
-                        </p>
-
-                    </div>
-
-                </div>
-
-
-                <!-- PEOPLE -->
-
-                <div class="card">
-
-                    <div class="card-icon">
-                        👷
-                    </div>
-
-                    <div class="card-content">
-
-                        <h3>
-                            People
-                        </h3>
-
-                        <p id="personStatus">
-                            Waiting...
-                        </p>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <!-- =================================================
-             DETECTION DETAILS
-        ================================================== -->
-
-        <section class="details-section">
-
-            <h2>
-                Current Detections
-            </h2>
-
-            <div
-                id="detectionList"
-                class="detection-list"
-            >
-
-                <p class="empty">
-                    No detections yet.
+                    Click "Start Camera" to begin detection.
                 </p>
 
-            </div>
+                <p
+                    id="riskBadge"
+                    class="camera-message"
+                    style="font-weight: 700; letter-spacing: 0.5px;"
+                >
+                    RISK: —
+                </p>
+
+            </section>
+
+
+            <section class="detections-section">
+
+                <h2>
+                    Detection Status
+                </h2>
+
+
+                <div class="cards">
+
+                    <!-- PPE -->
+
+                    <div class="card">
+
+                        <div class="card-icon">🦺</div>
+
+                        <div class="card-content">
+                            <h3>PPE</h3>
+                            <p id="ppeStatus">Waiting...</p>
+                        </div>
+
+                    </div>
+
+
+                    <!-- FIRE -->
+
+                    <div class="card">
+
+                        <div class="card-icon">🔥</div>
+
+                        <div class="card-content">
+                            <h3>Fire</h3>
+                            <p id="fireStatus">Waiting...</p>
+                        </div>
+
+                    </div>
+
+
+                    <!-- SMOKE -->
+
+                    <div class="card">
+
+                        <div class="card-icon">💨</div>
+
+                        <div class="card-content">
+                            <h3>Smoke</h3>
+                            <p id="smokeStatus">Waiting...</p>
+                        </div>
+
+                    </div>
+
+
+                    <!-- PEOPLE -->
+
+                    <div class="card">
+
+                        <div class="card-icon">👷</div>
+
+                        <div class="card-content">
+                            <h3>People</h3>
+                            <p id="personStatus">Waiting...</p>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <section class="details-section">
+
+                <h2>
+                    Current Detections
+                </h2>
+
+                <div
+                    id="detectionList"
+                    class="detection-list"
+                >
+                    <p class="empty">No detections yet.</p>
+                </div>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             ALERTS
+        ================================================== -->
+
+        <section class="tab-panel" id="panel-alerts">
+
+            <section class="details-section">
+
+                <div class="section-header">
+
+                    <h2>Alerts</h2>
+
+                    <div class="controls">
+
+                        <select id="alertStatusFilter" class="select">
+                            <option value="">All statuses</option>
+                            <option value="new">New</option>
+                            <option value="acknowledged">Acknowledged</option>
+                        </select>
+
+                        <button id="refreshAlerts" class="btn start">↻ Refresh</button>
+
+                    </div>
+
+                </div>
+
+                <div id="alertsList" class="alert-list">
+                    <p class="empty">Loading alerts…</p>
+                </div>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             HISTORY
+        ================================================== -->
+
+        <section class="tab-panel" id="panel-history">
+
+            <section class="details-section">
+
+                <div class="section-header">
+
+                    <h2>Event History</h2>
+
+                    <div class="controls">
+
+                        <select id="historyRiskFilter" class="select">
+                            <option value="">All risk</option>
+                            <option value="LOW">LOW</option>
+                            <option value="MEDIUM">MEDIUM</option>
+                            <option value="HIGH">HIGH</option>
+                            <option value="CRITICAL">CRITICAL</option>
+                        </select>
+
+                        <select id="historySourceFilter" class="select">
+                            <option value="">All sources</option>
+                            <option value="camera">camera</option>
+                            <option value="video">video</option>
+                            <option value="image">image</option>
+                        </select>
+
+                        <button id="refreshHistory" class="btn start">↻ Refresh</button>
+
+                    </div>
+
+                </div>
+
+                <div class="table-wrap">
+                    <table class="data-table" id="historyTable">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Source</th>
+                                <th>Risk</th>
+                                <th>Violations</th>
+                                <th>People</th>
+                                <th>Fire</th>
+                                <th>Smoke</th>
+                                <th>Evidence</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody">
+                            <tr><td colspan="8" class="empty">Loading history…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             STATISTICS
+        ================================================== -->
+
+        <section class="tab-panel" id="panel-statistics">
+
+            <section class="details-section">
+
+                <div class="section-header">
+
+                    <h2>Statistics</h2>
+
+                    <div class="controls">
+
+                        <select id="statsRange" class="select">
+                            <option value="24h">Last 24h</option>
+                            <option value="7d">Last 7 days</option>
+                            <option value="30d">Last 30 days</option>
+                            <option value="all">All time</option>
+                        </select>
+
+                        <button id="refreshStats" class="btn start">↻ Refresh</button>
+
+                    </div>
+
+                </div>
+
+                <div class="cards" id="statsCards">
+                    <p class="empty">Loading statistics…</p>
+                </div>
+
+                <h3 class="chart-title">Events by risk level</h3>
+                <div id="riskChart" class="bar-chart"></div>
+
+                <h3 class="chart-title">Top violation types</h3>
+                <div id="violationChart" class="bar-chart"></div>
+
+                <h3 class="chart-title">Events by day</h3>
+                <div id="dayChart" class="bar-chart"></div>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             EVIDENCE
+        ================================================== -->
+
+        <section class="tab-panel" id="panel-evidence">
+
+            <section class="details-section">
+
+                <div class="section-header">
+
+                    <h2>Evidence Gallery</h2>
+
+                    <div class="controls">
+                        <button id="refreshEvidence" class="btn start">↻ Refresh</button>
+                    </div>
+
+                </div>
+
+                <div id="evidenceGallery" class="evidence-gallery">
+                    <p class="empty">Loading evidence…</p>
+                </div>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             REPORTS
+        ================================================== -->
+
+        <section class="tab-panel" id="panel-reports">
+
+            <section class="details-section">
+
+                <div class="section-header">
+
+                    <h2>Reports</h2>
+
+                    <div class="controls">
+
+                        <select id="reportRange" class="select">
+                            <option value="24h">Last 24h</option>
+                            <option value="7d">Last 7 days</option>
+                            <option value="30d">Last 30 days</option>
+                            <option value="all">All time</option>
+                        </select>
+
+                        <button id="generateReport" class="btn start">Generate</button>
+
+                        <a id="downloadJson" class="btn stop" href="#" download>JSON</a>
+                        <a id="downloadCsv" class="btn stop" href="#" download>CSV</a>
+
+                    </div>
+
+                </div>
+
+                <div id="reportSummary" class="report-summary">
+                    <p class="empty">Choose a range and click Generate.</p>
+                </div>
+
+            </section>
 
         </section>
 
@@ -262,10 +457,7 @@
          JAVASCRIPT
     ====================================================== -->
 
-    <script
-        src="app.js"
-    >
-    </script>
+    <script src="app.js"></script>
 
 </body>
 

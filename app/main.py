@@ -1,34 +1,37 @@
 """
 Construction Safety AI - FastAPI application.
 
-CHANGELOG (vs original)
-------------------------
-- Retired the standalone /detect/ppe/* endpoints and the legacy
-  models/ppe/best.pt model. PPE is now detected as part of the unified
-  hazard model and goes through the full SafetyEngine like every other
-  hazard type, instead of being a separate, disconnected code path.
-- New unified pipeline endpoints:
-    POST /safety/detect/image   - single image, full pipeline
-    POST /safety/detect/video   - full video, full pipeline, annotated output
-    WS   /safety/ws/camera      - live camera, full pipeline, streamed
-    POST /detect/fire/image     - kept standalone (useful for isolated
-                                   fire-model debugging/testing)
-- Every per-frame processing step (video loop, websocket loop) is now
-  wrapped in its own try/except so ONE malformed frame logs a warning
-  and gets skipped instead of killing the entire video job or dropping
-  the whole websocket connection - this matters once you're running
-  against real, messy construction footage instead of clean synthetic
-  test videos.
-- Each video job / websocket connection gets its OWN SafetyEngine +
-  DangerZoneTracker instance, so danger-zone ids stay stable across
-  that stream's frames without leaking state between unrelated
-  uploads/streams (a shared global engine would cross-contaminate
-  zone tracking between different people's videos).
-- HazardDetector.track() uses ByteTrack persistently within a single
-  video/stream (persist=True) so the SAME person keeps the SAME
-  track_id across frames, which is required for anything that wants to
-  reason about a specific worker over time (dangerous-zone dwell time,
-  repeated-violation alerts, etc.).
+ARCHITECTURE
+------------
+All per-frame processing goes through ONE shared pipeline
+(src/pipeline.py::SafetyPipeline) - the REST image endpoint, the REST video
+endpoint, and the live websocket camera all run the identical code path, so
+"video" and "webcam" cannot drift apart. The heavy YOLO models
+(HazardDetector, FireDetector) are loaded ONCE at startup and injected into
+every per-stream pipeline; they serialise their own forward passes behind an
+internal lock, so concurrent video jobs and camera clients never race on the
+shared model object.
+
+OBSERVABILITY / "FINAL" FEATURES
+--------------------------------
+Each stream also gets a SafetyMonitor (app/monitor.py) that turns processed
+frames into durable artefacts:
+  - History  : risk-bearing frames stored as events in SQLite (cooldown-bounded)
+  - Evidence : annotated JPEG snapshot + short MP4 clip on HIGH/CRITICAL
+  - Alerts   : HIGH/CRITICAL events recorded to SQLite (dashboard feed) and
+               pushed to Telegram (optional, off the event loop)
+  - Statistics / Reports : aggregates over the event/alert history
+Persistence is a single thread-safe SQLite DB (app/storage.py); evidence files
+are served read-only from a StaticFiles mount at /evidence.
+
+CONCURRENCY NOTE
+----------------
+ByteTrack state lives inside the shared HazardDetector model object. With a
+SINGLE active tracked stream (the normal case) this is correct. If you run
+MULTIPLE simultaneous tracked streams against one shared model, their trackers
+interleave; for strict per-stream isolation, construct a dedicated
+HazardDetector per stream and inject it into that stream's SafetyPipeline
+(see docs/DETECTION_LIMITATIONS.md).
 """
 
 from __future__ import annotations
@@ -38,25 +41,35 @@ import logging
 import shutil
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import cv2
 import numpy as np
 
 from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from src.hazard.hazard_detector import HazardDetector
-from src.hazard.detection_filter import filter_detections
-from src.hazard.track_confirmation import TrackConfirmationTracker
 from src.fire.fire_detector import FireDetector
-from src.fire.fire_confirmation import FireConfirmationTracker
-from src.safety.safety_engine import SafetyEngine
-from src.safety.geometry import DangerZoneTracker
 from src.safety.rules import SafetyConfig
-from src.safety.overlay import draw_safety_overlay
+from src.pipeline import (
+    SafetyPipeline,
+    serialize_result,
+    summarize_result,
+    detections_for_ui,
+)
+
+from app.settings import SETTINGS, RISK_ORDER
+from app.storage import init_db, get_db
+from app.alerting import AlertManager
+from app.monitor import SafetyMonitor
+from app.evidence import prune_evidence
+from app.reports import build_report, events_to_csv, RANGES
 
 
 logging.basicConfig(level=logging.INFO)
@@ -77,6 +90,41 @@ OUTPUT_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 
 FRONTEND_DIR = BASE_DIR / "frontend"
 
+# Keep only the newest N generated artifacts on disk (bounded growth).
+MAX_OUTPUT_FILES = 100
+_OUTPUT_PATTERNS = ("*_input.mp4", "*_safety.mp4", "*_annotated.jpg")
+
+# App-level singletons, created in the lifespan startup hook.
+ALERT_MANAGER: Optional[AlertManager] = None
+
+
+# ============================================================
+# LIFESPAN (startup / shutdown)
+# ============================================================
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global ALERT_MANAGER
+
+    SETTINGS.ensure_dirs()
+    init_db(SETTINGS.db_path)
+    ALERT_MANAGER = AlertManager.from_settings(SETTINGS, get_db())
+
+    db = get_db()
+    db.prune_events(SETTINGS.max_events)
+    prune_evidence(SETTINGS.evidence_dir, SETTINGS.max_evidence_files)
+
+    logger.info(
+        "Observability ready: db=%s evidence=%s telegram=%s",
+        SETTINGS.db_path, SETTINGS.evidence_dir,
+        "on" if SETTINGS.telegram_configured else "off",
+    )
+    yield
+    try:
+        get_db().close()
+    except Exception:  # noqa: BLE001
+        pass
+
 
 # ============================================================
 # FASTAPI
@@ -85,7 +133,8 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 app = FastAPI(
     title="Construction Safety AI",
     description="AI-powered construction site safety detection system",
-    version="2.0.0",
+    version="3.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -115,124 +164,51 @@ logger.info("Models loaded successfully.")
 
 
 # ============================================================
-# BASIC ENDPOINTS
+# HELPERS
 # ============================================================
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": app.version}
 
 
-# ============================================================
-# SHARED PIPELINE HELPER
-# ============================================================
-
-def run_pipeline_on_frame(
-    frame: np.ndarray,
-    engine: SafetyEngine,
-    track: bool = True,
-    fire_tracker: FireConfirmationTracker = None,
-    track_confirmation: TrackConfirmationTracker = None,
-):
+def _prune_old_outputs(directory: Path = OUTPUT_VIDEO_DIR, keep: int = MAX_OUTPUT_FILES) -> None:
     """
-    Run one frame through hazard detection + fire detection + the
-    safety engine, and return (result, persons, machines, annotated_frame).
-
-    `track=True` uses ByteTrack (persist=True) - use this for video/
-    camera streams. `track=False` runs plain detection - use this for
-    single standalone images where there is no "next frame" to track
-    into.
-
-    `fire_tracker`, if given, gates raw fire/smoke detections through
-    FireConfirmationTracker before they reach the safety engine, so a
-    single low-confidence/tiny/one-frame false positive can't push the
-    risk level to CRITICAL or get logged as a real fire event. Pass
-    None to skip confirmation (e.g. for a single standalone image,
-    where there's no "next frame" to build persistence from anyway).
-
-    `track_confirmation`, if given, requires a hazard detection's
-    track_id to have persisted for several frames before it's used for
-    anything (person extraction, PPE association, drawing, the safety
-    engine) - this is what stops a one-frame flicker like "ID:15
-    Person 0.37" on a thin pole from ever being treated as a real
-    worker. Pass None for the same reason as fire_tracker above.
-
-    Pipeline order matters here and matches the architecture: raw YOLO
-    output is filtered (confidence/size/aspect-ratio - drops most
-    single-frame junk like "ID:714 Person 0.42" on the first frame it
-    ever appears) BEFORE track confirmation gets a chance to build a
-    streak for it, so a detection that's obviously too small/low-
-    confidence to be real never even starts accumulating hits.
+    Delete the oldest generated artifacts so the output directory does not
+    grow without bound. Only touches files matching our own output
+    patterns - never user inputs or unrelated directories.
     """
 
-    detections = hazard_detector.track(frame) if track else hazard_detector.predict(frame)
+    files: List[Path] = []
+    for pattern in _OUTPUT_PATTERNS:
+        files.extend(p for p in directory.glob(pattern) if p.is_file())
 
-    detections = filter_detections(detections, frame_shape=frame.shape[:2])
+    if len(files) <= keep:
+        return
 
-    if track_confirmation is not None:
-        detections = track_confirmation.update(detections, frame_shape=frame.shape[:2])
-
-    raw_fire_detections = fire_detector.predict(frame)
-
-    fire_detections = (
-        fire_tracker.update(raw_fire_detections) if fire_tracker is not None
-        else raw_fire_detections
-    )
-
-    persons = hazard_detector.extract_persons(detections)
-    machines = hazard_detector.extract_machines(detections)
-
-    result = engine.analyze(
-        detections=detections,
-        persons=persons,
-        machines=machines,
-        fire_detections=fire_detections,
-        frame_width=float(frame.shape[1]),
-    )
-
-    annotated_frame = draw_safety_overlay(
-        frame, result, detections, hazard_detector.class_names
-    )
-
-    return result, persons, machines, annotated_frame
+    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    for stale in files[keep:]:
+        try:
+            stale.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.debug("Could not prune %s: %s", stale, exc)
 
 
-def _serialize_result(result: dict) -> dict:
-    """
-    Strip non-JSON-serializable objects (shapely Polygons) out of a
-    SafetyEngine result before sending it over HTTP/WebSocket, while
-    keeping the useful bits (zone id, area, exterior coordinates).
-    """
-
-    serialized_zones = []
-    for zone in result.get("danger_zones", []):
-        polygon = zone.get("polygon")
-        serialized_zones.append(
-            {
-                "zone_id": zone.get("zone_id"),
-                "age": zone.get("age"),
-                "missed": zone.get("missed"),
-                "area": float(polygon.area) if polygon is not None else None,
-                "coordinates": (
-                    [list(coord) for coord in polygon.exterior.coords]
-                    if polygon is not None
-                    else []
-                ),
-            }
-        )
+def _build_payload(result: Dict[str, Any], detections: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """The stable JSON contract shared by the image and websocket endpoints."""
 
     return {
-        "risk_level": result.get("risk_level"),
-        "violations": result.get("violations", []),
-        "violation_count": result.get("violation_count", 0),
-        "violation_counts": result.get("violation_counts", {}),
-        "danger_zones": serialized_zones,
-        "people_inside_zones": result.get("people_inside_zones", []),
-        "distance_results": result.get("distance_results", []),
-        "pole_results": result.get("pole_results", []),
-        "fire_detections": result.get("fire_detections", []),
-        "statistics": result.get("statistics", {}),
+        **serialize_result(result),
+        "summary": summarize_result(result),
+        "detections": detections_for_ui(detections),
     }
+
+
+def _new_monitor(source: str) -> Optional[SafetyMonitor]:
+    """Build a per-stream monitor; None if observability isn't initialised."""
+    if ALERT_MANAGER is None:
+        return None
+    return SafetyMonitor(source, SETTINGS, get_db(), ALERT_MANAGER)
 
 
 # ============================================================
@@ -249,29 +225,38 @@ async def detect_safety_image(file: UploadFile = File(...)):
     if image is None:
         return {"success": False, "error": "Invalid image"}
 
-    # A standalone image has no "next frame" to track into, and no
-    # zone/fire history worth stabilizing - fresh engine, no tracking,
-    # no fire confirmation (a single image gets fire_tracker=None, so
-    # any fire detection above the base confidence in rules.py counts
-    # immediately - there's no "next frame" to require persistence from).
-    engine = SafetyEngine(config=DEFAULT_SAFETY_CONFIG, zone_tracker=None)
+    # A standalone image has no "next frame": fresh pipeline, no tracking,
+    # no temporal confirmation gates.
+    pipeline = SafetyPipeline(
+        hazard_detector,
+        fire_detector,
+        config=DEFAULT_SAFETY_CONFIG,
+        enable_track_confirmation=False,
+        enable_fire_confirmation=False,
+    )
 
     try:
-        result, persons, machines, annotated = run_pipeline_on_frame(
-            image, engine, track=False, fire_tracker=None
-        )
+        frame_result = await run_in_threadpool(pipeline.process_frame, image, False, True)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Image pipeline failed")
         return {"success": False, "error": str(exc)}
 
+    _prune_old_outputs()
     output_id = str(uuid.uuid4())
     output_path = OUTPUT_VIDEO_DIR / f"{output_id}_annotated.jpg"
-    cv2.imwrite(str(output_path), annotated)
+    cv2.imwrite(str(output_path), frame_result.annotated)
+
+    monitor = _new_monitor("image")
+    if monitor is not None:
+        try:
+            await run_in_threadpool(monitor.handle, frame_result.result, frame_result.annotated)
+        finally:
+            await run_in_threadpool(monitor.close)
 
     return {
         "success": True,
         "filename": file.filename,
-        "result": _serialize_result(result),
+        "result": _build_payload(frame_result.result, frame_result.detections),
         "annotated_image_path": str(output_path),
     }
 
@@ -290,7 +275,7 @@ async def detect_fire_image(file: UploadFile = File(...)):
     if image is None:
         return {"success": False, "error": "Invalid image"}
 
-    detections = fire_detector.predict(image)
+    detections = await run_in_threadpool(fire_detector.predict, image)
 
     return {
         "success": True,
@@ -304,6 +289,87 @@ async def detect_fire_image(file: UploadFile = File(...)):
 # VIDEO - FULL SAFETY PIPELINE
 # ============================================================
 
+def _process_video_file(
+    input_path: Path,
+    output_path: Path,
+    pipeline: SafetyPipeline,
+    monitor: Optional[SafetyMonitor] = None,
+) -> Dict[str, Any]:
+    """
+    Synchronous, blocking whole-video pass. Runs in a worker thread so the
+    event loop stays responsive. One bad frame is skipped, never fatal.
+    """
+
+    cap = cv2.VideoCapture(str(input_path))
+    if not cap.isOpened():
+        return {"opened": False}
+
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
+
+    frame_index = 0
+    failed_frames = 0
+    max_risk_seen = "SAFE"
+    # Bounded aggregate (replaces the old unbounded per-frame violation_log).
+    violation_totals: Dict[str, int] = {}
+
+    start_time = time.time()
+
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            frame_index += 1
+
+            try:
+                frame_result = pipeline.process_frame(frame, track=True, draw=True)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Frame %d failed, writing raw frame instead: %s", frame_index, exc)
+                failed_frames += 1
+                writer.write(frame)
+                continue
+
+            writer.write(frame_result.annotated)
+
+            result = frame_result.result
+            risk_level = result.get("risk_level", "SAFE")
+            if RISK_ORDER.index(risk_level) > RISK_ORDER.index(max_risk_seen):
+                max_risk_seen = risk_level
+
+            for violation_type, count in (result.get("violation_counts", {}) or {}).items():
+                violation_totals[violation_type] = violation_totals.get(violation_type, 0) + count
+
+            # Durability: history / evidence / alerts (off the event loop already).
+            if monitor is not None:
+                try:
+                    monitor.handle(result, frame_result.annotated)
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("Monitor failed on frame %d: %s", frame_index, exc.__class__.__name__)
+    finally:
+        cap.release()
+        writer.release()
+        if monitor is not None:
+            try:
+                monitor.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    return {
+        "opened": True,
+        "frames": frame_index,
+        "failed_frames": failed_frames,
+        "max_risk": max_risk_seen,
+        "violation_totals": violation_totals,
+        "elapsed": time.time() - start_time,
+    }
+
+
 @app.post("/safety/detect/video")
 async def detect_safety_video(file: UploadFile = File(...)):
 
@@ -314,80 +380,25 @@ async def detect_safety_video(file: UploadFile = File(...)):
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    cap = cv2.VideoCapture(str(input_path))
+    # One pipeline for the WHOLE video: track ids, zone ids, and
+    # confirmation streaks stay coherent frame-to-frame within this job.
+    pipeline = SafetyPipeline(hazard_detector, fire_detector, config=DEFAULT_SAFETY_CONFIG)
+    monitor = _new_monitor("video")
 
-    if not cap.isOpened():
-        input_path.unlink(missing_ok=True)
-        return {"success": False, "error": "Could not open video"}
-
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
-
-    # One engine + zone tracker + fire tracker + track-confirmation
-    # tracker for the WHOLE video, so track_ids, zone_ids, and
-    # confirmation streaks all stay coherent frame-to-frame within
-    # this job.
-    zone_tracker = DangerZoneTracker()
-    fire_tracker = FireConfirmationTracker()
-    track_confirmation = TrackConfirmationTracker()
-    engine = SafetyEngine(config=DEFAULT_SAFETY_CONFIG, zone_tracker=zone_tracker)
-
-    frame_index = 0
-    failed_frames = 0
-    max_risk_seen = "SAFE"
-    risk_order = ["SAFE", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
-    violation_log = []
-
-    start_time = time.time()
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        frame_index += 1
-
-        try:
-            result, persons, machines, annotated = run_pipeline_on_frame(
-                frame, engine, track=True,
-                fire_tracker=fire_tracker,
-                track_confirmation=track_confirmation,
-            )
-        except Exception as exc:  # noqa: BLE001
-            # A single bad frame should not abort the whole video.
-            logger.warning("Frame %d failed, writing raw frame instead: %s", frame_index, exc)
-            failed_frames += 1
-            writer.write(frame)
-            continue
-
-        writer.write(annotated)
-
-        risk_level = result.get("risk_level", "SAFE")
-        if risk_order.index(risk_level) > risk_order.index(max_risk_seen):
-            max_risk_seen = risk_level
-
-        if result.get("violation_count", 0) > 0:
-            violation_log.append(
-                {
-                    "frame": frame_index,
-                    "risk_level": risk_level,
-                    "violation_count": result["violation_count"],
-                    "violation_counts": result.get("violation_counts", {}),
-                }
-            )
-
-    cap.release()
-    writer.release()
+    summary = await run_in_threadpool(_process_video_file, input_path, output_path, pipeline, monitor)
     input_path.unlink(missing_ok=True)
 
-    elapsed = time.time() - start_time
+    if not summary.get("opened"):
+        output_path.unlink(missing_ok=True)
+        return {"success": False, "error": "Could not open video"}
+
+    _prune_old_outputs()
+    prune_evidence(SETTINGS.evidence_dir, SETTINGS.max_evidence_files)
+
     logger.info(
         "Video %s: %d frames (%d failed) in %.1fs, max risk = %s",
-        video_id, frame_index, failed_frames, elapsed, max_risk_seen,
+        video_id, summary["frames"], summary["failed_frames"],
+        summary["elapsed"], summary["max_risk"],
     )
 
     return FileResponse(
@@ -395,9 +406,9 @@ async def detect_safety_video(file: UploadFile = File(...)):
         media_type="video/mp4",
         filename="safety_analysis.mp4",
         headers={
-            "X-Frames-Processed": str(frame_index),
-            "X-Frames-Failed": str(failed_frames),
-            "X-Max-Risk-Level": max_risk_seen,
+            "X-Frames-Processed": str(summary["frames"]),
+            "X-Frames-Failed": str(summary["failed_frames"]),
+            "X-Max-Risk-Level": summary["max_risk"],
         },
     )
 
@@ -406,19 +417,20 @@ async def detect_safety_video(file: UploadFile = File(...)):
 # LIVE CAMERA - WEBSOCKET, FULL SAFETY PIPELINE
 # ============================================================
 
+def _decode_frame(data: bytes) -> Optional[np.ndarray]:
+    image_array = np.frombuffer(data, np.uint8)
+    return cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+
+
 @app.websocket("/safety/ws/camera")
 async def safety_camera_websocket(websocket: WebSocket):
 
     await websocket.accept()
     logger.info("Safety camera WebSocket connected")
 
-    # Fresh engine + zone tracker + fire tracker + track-confirmation
-    # tracker PER CONNECTION - do not share these across different
-    # clients/streams.
-    zone_tracker = DangerZoneTracker()
-    fire_tracker = FireConfirmationTracker()
-    track_confirmation = TrackConfirmationTracker()
-    engine = SafetyEngine(config=DEFAULT_SAFETY_CONFIG, zone_tracker=zone_tracker)
+    # Fresh pipeline PER CONNECTION - never shared across clients/streams.
+    pipeline = SafetyPipeline(hazard_detector, fire_detector, config=DEFAULT_SAFETY_CONFIG)
+    monitor = _new_monitor("camera")
 
     consecutive_failures = 0
     MAX_CONSECUTIVE_FAILURES = 20  # guard against a persistently broken stream
@@ -446,20 +458,17 @@ async def safety_camera_websocket(websocket: WebSocket):
                 continue
 
             try:
-                image_array = np.frombuffer(data, np.uint8)
-                frame = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
-
+                frame = await run_in_threadpool(_decode_frame, data)
                 if frame is None:
                     raise ValueError("Could not decode incoming frame")
 
-                result, persons, machines, annotated = run_pipeline_on_frame(
-                    frame, engine, track=True,
-                    fire_tracker=fire_tracker,
-                    track_confirmation=track_confirmation,
+                # Inference + annotation off the event loop.
+                frame_result = await run_in_threadpool(
+                    pipeline.process_frame, frame, True, True
                 )
 
                 success, encoded = cv2.imencode(
-                    ".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75]
+                    ".jpg", frame_result.annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75]
                 )
                 if not success:
                     raise ValueError("Failed to encode annotated frame")
@@ -469,16 +478,19 @@ async def safety_camera_websocket(websocket: WebSocket):
                 await websocket.send_json(
                     {
                         "image": f"data:image/jpeg;base64,{base64_img}",
-                        **_serialize_result(result),
+                        **_build_payload(frame_result.result, frame_result.detections),
                     }
                 )
+
+                # Durability: history / evidence / alerts (off the event loop).
+                if monitor is not None:
+                    await run_in_threadpool(monitor.handle, frame_result.result, frame_result.annotated)
 
                 consecutive_failures = 0
 
             except Exception as exc:  # noqa: BLE001
-                # Skip this frame, keep the connection alive. Only bail
-                # out if failures are persistent (e.g. bad stream format)
-                # rather than one-off (e.g. a single corrupted JPEG).
+                # Skip this frame, keep the connection alive. Only bail out
+                # if failures are persistent rather than one-off.
                 consecutive_failures += 1
                 logger.warning(
                     "Frame processing failed (%d consecutive): %s",
@@ -501,6 +513,11 @@ async def safety_camera_websocket(websocket: WebSocket):
         logger.exception("WebSocket error: %s", exc)
 
     finally:
+        if monitor is not None:
+            try:
+                await run_in_threadpool(monitor.close)
+            except Exception:  # noqa: BLE001
+                pass
         try:
             await websocket.close()
         except Exception:  # noqa: BLE001
@@ -508,8 +525,107 @@ async def safety_camera_websocket(websocket: WebSocket):
 
 
 # ============================================================
-# MOUNT FRONTEND STATIC FILES AT ROOT /
+# OBSERVABILITY API (Dashboard / Alerts / History / Statistics /
+#                    Evidence / Reports)
 # ============================================================
+
+@app.get("/api/events")
+def api_events(
+    limit: int = 100,
+    risk: Optional[str] = None,
+    source: Optional[str] = None,
+    since: Optional[float] = None,
+):
+    """History feed (newest first)."""
+    events = get_db().list_events(limit=min(limit, 1000), risk=risk, source=source, since=since)
+    return {"events": events, "count": len(events)}
+
+
+@app.get("/api/alerts")
+def api_alerts(
+    limit: int = 100,
+    status: Optional[str] = None,
+    level: Optional[str] = None,
+    since: Optional[float] = None,
+):
+    """Alert feed + unacknowledged count (for the header badge)."""
+    db = get_db()
+    alerts = db.list_alerts(limit=min(limit, 1000), status=status, level=level, since=since)
+    return {
+        "alerts": alerts,
+        "count": len(alerts),
+        "unacknowledged": db.count_alerts("new"),
+    }
+
+
+@app.post("/api/alerts/{alert_id}/ack")
+def api_ack_alert(alert_id: int):
+    ok = get_db().ack_alert(alert_id)
+    return {"success": ok, "id": alert_id}
+
+
+@app.get("/api/statistics")
+def api_statistics(range: str = "24h"):
+    """Aggregate statistics for the Statistics tab."""
+    return build_report(get_db(), range if range in RANGES else "24h")
+
+
+@app.get("/api/evidence")
+def api_evidence(limit: int = 60):
+    """Evidence gallery: events that have a snapshot and/or clip."""
+    events = get_db().list_events(limit=500)
+    items = [
+        {
+            "event_id": e.get("id"),
+            "ts": e.get("ts"),
+            "source": e.get("source"),
+            "risk_level": e.get("risk_level"),
+            "violation_counts": e.get("violation_counts", {}),
+            "image": e.get("evidence_image"),
+            "clip": e.get("evidence_clip"),
+        }
+        for e in events
+        if e.get("evidence_image") or e.get("evidence_clip")
+    ][: min(limit, 500)]
+    return {"evidence": items, "count": len(items)}
+
+
+@app.get("/api/reports")
+def api_report(range: str = "24h"):
+    """Full period report (same aggregate as statistics, kept as its own route)."""
+    return build_report(get_db(), range if range in RANGES else "24h")
+
+
+@app.get("/api/reports/download")
+def api_report_download(range: str = "24h", format: str = "json"):
+    """Download a report as JSON (aggregate) or CSV (raw events in range)."""
+    db = get_db()
+    range = range if range in RANGES else "24h"
+    if format.lower() == "csv":
+        csv_text = events_to_csv(db, range)
+        return Response(
+            content=csv_text,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="safety_report_{range}.csv"'},
+        )
+    report = build_report(db, range)
+    return JSONResponse(
+        content=report,
+        headers={"Content-Disposition": f'attachment; filename="safety_report_{range}.json"'},
+    )
+
+
+# ============================================================
+# STATIC MOUNTS (must come last - "/" is a catch-all)
+# ============================================================
+
+# ensure_dirs() also runs in lifespan, but mounts are registered at import
+# time (before startup), so create the evidence dir here to guarantee the
+# /evidence mount exists on a fresh checkout.
+SETTINGS.ensure_dirs()
+
+if SETTINGS.evidence_dir.exists():
+    app.mount("/evidence", StaticFiles(directory=str(SETTINGS.evidence_dir)), name="evidence")
 
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="static")

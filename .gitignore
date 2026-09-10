@@ -1,14 +1,13 @@
-@"
 # Environment
 .venv/
 venv/
 __pycache__/
 *.pyc
 
-# Environment variables
+# Environment variables (secrets: Telegram token, chat id)
 .env
 
-# Datasets / data
+# Datasets / runtime data (SQLite DB, evidence snapshots/clips, outputs)
 data/
 
 # Videos
@@ -29,4 +28,3 @@ person_tracking_test/output/
 # IDE
 .vscode/
 .idea/
-"@ | Out-File -Encoding utf8 .gitignore

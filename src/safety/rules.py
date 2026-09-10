@@ -65,6 +65,20 @@ class SafetyConfig:
     # Machinery/vehicle <-> utility pole distance.
     pole_distance_threshold: float = 250.0
 
+    # Depth-aware person<->machinery proximity (calibration-free).
+    # When use_perspective_distance is True and a person box is tall
+    # enough to give a trustworthy scale, MACHINE_PROXIMITY is decided by
+    # the estimated real-world gap in metres (machine_distance_threshold_m)
+    # instead of the raw pixel gap. This stops two far-away objects that
+    # happen to be near each other in the image from firing a proximity
+    # alert. The metre threshold is resolution-INDEPENDENT, so unlike the
+    # pixel thresholds below it is never scaled by frame width. The pixel
+    # threshold is kept as a fallback for when the perspective scale is
+    # unavailable (tiny/partial person box).
+    use_perspective_distance: bool = True
+    assumed_person_height_m: float = 1.7
+    machine_distance_threshold_m: float = 2.5
+
     # Minimum confidence for explicit PPE violations.
     violation_confidence: float = 0.30
 
@@ -106,6 +120,16 @@ class SafetyConfig:
     # and drop sliver polygons that are not a real work area.
     zone_buffer_px: float = 20.0
     zone_min_area_px: float = 400.0
+
+    # A danger zone that was not re-detected THIS frame (cones flickered
+    # out of detection) stays "active" for this many frames - bridging
+    # brief detection gaps so zones/violations do not strobe - after which
+    # it is no longer used for drawing or for flagging people inside it.
+    # The DangerZoneTracker keeps the id alive longer (max_missed_frames)
+    # purely for identity continuity; this grace window is what gates
+    # whether a zone still COUNTS as a live hazard. Keeps a worker from
+    # being flagged inside a zone whose cones were genuinely removed.
+    zone_presence_grace_frames: int = 2
 
 
 def scaled_pixel_threshold(
@@ -311,7 +335,7 @@ def get_ppe_violations(
     relevant_detections = []
     for detection in detections:
         class_id = detection_class(detection)
-        if class_id not in (NO_HARDHAT, NO_SAFETY_VEST):
+        if class_id not in (NO_HARDHAT, NO_SAFETY_VEST, NO_MASK):
             continue
 
         confidence = detection_confidence(detection)
@@ -353,10 +377,17 @@ def get_ppe_violations(
             region_key = "head_region"
             violation_type = "NO_HARDHAT"
             message_suffix = "is not wearing a hardhat"
+            severity = "MEDIUM"
         elif class_id == NO_SAFETY_VEST:
             region_key = "torso_region"
             violation_type = "NO_SAFETY_VEST"
             message_suffix = "is not wearing a safety vest"
+            severity = "MEDIUM"
+        elif class_id == NO_MASK:
+            region_key = "head_region"
+            violation_type = "NO_MASK"
+            message_suffix = "is not wearing a mask"
+            severity = "LOW"
         else:
             continue
 
@@ -386,7 +417,7 @@ def get_ppe_violations(
                 "track_id": best_person["track_id"],
                 "confidence": confidence,
                 "overlap": best_overlap,
-                "severity": "MEDIUM",
+                "severity": severity,
                 "message": f"Person {best_person['track_id']} {message_suffix}",
             }
         )
@@ -430,13 +461,39 @@ def get_machine_distance_violations(
     distance_results: List[Dict],
     config: SafetyConfig,
 ) -> List[Dict]:
-    """Detect persons too close to machinery."""
+    """
+    Detect persons too close to machinery.
+
+    Decision metric (balanced, depth-aware):
+      - If perspective distance is enabled AND this result has a
+        trustworthy distance_m_est, alert when the estimated real-world
+        gap is within config.machine_distance_threshold_m metres. This is
+        resolution-independent and does not mis-fire on distant objects
+        that merely look close in the image.
+      - Otherwise (tiny/partial person box, or perspective disabled) fall
+        back to the pixel gap against config.machine_distance_threshold
+        (already scaled to frame width by SafetyEngine).
+    """
 
     violations: List[Dict[str, Any]] = []
 
     for result in distance_results:
-        distance = _extract_distance(result)
-        if distance is None or distance > config.machine_distance_threshold:
+        distance_px = _extract_distance(result)
+        distance_m = result.get("distance_m_est")
+
+        use_perspective = (
+            config.use_perspective_distance and distance_m is not None
+        )
+
+        if use_perspective:
+            too_close = distance_m <= config.machine_distance_threshold_m
+        else:
+            too_close = (
+                distance_px is not None
+                and distance_px <= config.machine_distance_threshold
+            )
+
+        if not too_close:
             continue
 
         track_id = result.get("track_id")
@@ -445,18 +502,27 @@ def get_machine_distance_violations(
             "machine_confidence", result.get("confidence", 0.0)
         )
 
+        if use_perspective:
+            detail = f"{distance_m:.1f} m"
+        elif distance_px is not None:
+            detail = f"{distance_px:.1f} px"
+        else:
+            detail = "unknown distance"
+
         violations.append(
             {
                 "type": "MACHINE_PROXIMITY",
                 "track_id": track_id,
                 "machine_class": machine_class,
-                "distance_px": distance,
-                "distance": distance,  # deprecated alias
+                "distance_px": distance_px,
+                "distance": distance_px,  # deprecated alias
+                "distance_m_est": distance_m,
+                "measurement": "metres" if use_perspective else "pixels",
                 "confidence": float(machine_confidence),
                 "severity": "HIGH",
                 "message": (
                     f"Person {track_id} is too close to {machine_class} "
-                    f"({distance:.1f} px)"
+                    f"({detail})"
                 ),
             }
         )

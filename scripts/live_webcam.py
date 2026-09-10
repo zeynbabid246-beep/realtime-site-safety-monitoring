@@ -1,37 +1,21 @@
 """
 Live webcam safety pipeline.
 
-    WEBCAM
-      │
-      ▼
-    VideoCapture(0)
-      │
-      ▼
-    Current Frame
-      │
-      ├──────────────────────────────┐
-      ▼                              ▼
-    Hazard YOLO                   Fire-Smoke YOLO
-    (Person / Machinery / PPE)    (Fire / Smoke)
-      │                              │
-      ▼                              ▼
-    ByteTrack → Person IDs      confirmation gate
-      │                              │
-      └──────────┬───────────────────┘
-                 ▼
-         Distance / Zones
-                 ▼
-           Safety Engine
-                 ▼
-    SAFE / LOW / MEDIUM / HIGH / CRITICAL
-                 ▼
-            LIVE VIDEO  (press Q to quit)
+    WEBCAM -> VideoCapture -> SafetyPipeline (SAME code path as the API
+    and analyze_video.py) -> LIVE VIDEO  (press Q to quit)
+
+The pipeline (src/pipeline.py::SafetyPipeline) runs hazard YOLO +
+ByteTrack, the stateless detection filter, track confirmation, fire/smoke
+YOLO + confirmation, the SafetyEngine (zones / perspective distance / PPE
+/ proximity / fire), and the overlay - identical to the server, so the
+webcam and uploaded videos behave the same.
 
 Usage (from project root):
 
     python scripts/live_webcam.py
     python scripts/live_webcam.py --camera 1
     python scripts/live_webcam.py --skip-fire
+    python scripts/live_webcam.py --disable-perspective-distance
 """
 
 from __future__ import annotations
@@ -46,12 +30,8 @@ import cv2
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.hazard.hazard_detector import HazardDetector
-from src.hazard.detection_filter import filter_detections
-from src.hazard.track_confirmation import TrackConfirmationTracker
-from src.safety.safety_engine import SafetyEngine
-from src.safety.geometry import DangerZoneTracker
 from src.safety.rules import SafetyConfig
-from src.safety.overlay import draw_safety_overlay
+from src.pipeline import SafetyPipeline
 
 
 def parse_args() -> argparse.Namespace:
@@ -66,6 +46,13 @@ def parse_args() -> argparse.Namespace:
                         help="Run hazard-only (no Fire-Smoke model).")
     parser.add_argument("--fire-model", default="models/fire_smoke/best.pt")
     parser.add_argument("--fire-conf", type=float, default=0.20)
+    parser.add_argument("--machine-distance-m", type=float, default=2.5,
+                        help="Depth-aware person<->machine proximity threshold in metres.")
+    parser.add_argument("--disable-perspective-distance", action="store_true",
+                        help="Use the pure-pixel proximity threshold instead of the metre estimate.")
+    parser.add_argument("--disable-static-machinery-filter", action="store_true",
+                        help="Keep perfectly-static machinery/vehicle tracks (e.g. a background "
+                             "building misclassified as machinery) instead of suppressing them.")
     parser.add_argument("--disable-filters", action="store_true",
                         help="Skip size/confidence/aspect-ratio and track-confirmation gates.")
     return parser.parse_args()
@@ -106,38 +93,49 @@ def main() -> None:
     print("=" * 62)
     print("LIVE WEBCAM SAFETY PIPELINE")
     print("=" * 62)
-    print("  WEBCAM -> VideoCapture -> Hazard YOLO + Fire-Smoke YOLO")
-    print("         -> ByteTrack / confirmation -> Distance/Zones")
-    print("         -> Safety Engine -> LIVE VIDEO")
-    print()
 
     hazard_detector = HazardDetector(
-        hazard_model_path,
-        confidence=args.hazard_conf,
-        image_size=args.imgsz,
+        hazard_model_path, confidence=args.hazard_conf, image_size=args.imgsz,
         tracker="bytetrack.yaml",
     )
     print(f"Hazard classes: {hazard_detector.class_names}")
 
     fire_detector = None
-    fire_tracker = None
     if not args.skip_fire:
         from src.fire.fire_detector import FireDetector
-        from src.fire.fire_confirmation import FireConfirmationTracker
 
         fire_model_path = Path(args.fire_model)
         if not fire_model_path.exists():
             print(f"ERROR: fire model not found: {fire_model_path}", file=sys.stderr)
             sys.exit(1)
         fire_detector = FireDetector(fire_model_path, confidence=args.fire_conf, image_size=args.imgsz)
-        fire_tracker = FireConfirmationTracker()
         print(f"Fire/smoke classes: {fire_detector.class_names}")
     else:
         print("Fire-Smoke model: OFF (--skip-fire)")
 
-    zone_tracker = DangerZoneTracker()
-    track_confirmation = None if args.disable_filters else TrackConfirmationTracker(min_hits=3)
-    engine = SafetyEngine(config=SafetyConfig(), zone_tracker=zone_tracker)
+    config = SafetyConfig(
+        machine_distance_threshold_m=args.machine_distance_m,
+        use_perspective_distance=not args.disable_perspective_distance,
+    )
+
+    from src.hazard.track_confirmation import TrackConfirmationTracker
+
+    track_confirmation = None
+    if not args.disable_filters:
+        track_confirmation = TrackConfirmationTracker(
+            min_hits=3,
+            filter_static_machinery=not args.disable_static_machinery_filter,
+        )
+
+    pipeline = SafetyPipeline(
+        hazard_detector,
+        fire_detector,
+        config=config,
+        enable_detection_filter=not args.disable_filters,
+        enable_track_confirmation=track_confirmation is not None,
+        enable_fire_confirmation=fire_detector is not None,
+        track_confirmation=track_confirmation,
+    )
 
     cap = open_camera(args.camera, args.width, args.height)
     print(f"Webcam {args.camera} open. Press Q to quit.\n")
@@ -145,7 +143,7 @@ def main() -> None:
     window_name = "Construction Safety — LIVE"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
-    frame_index = 0
+    frame_count = 0
     t0 = time.time()
     fps = 0.0
 
@@ -156,55 +154,31 @@ def main() -> None:
                 print("WARNING: failed to read frame from webcam.", file=sys.stderr)
                 continue
 
-            frame_index += 1
-
-            persons = []
-            machines = []
-            result = {"risk_level": "SAFE", "danger_zones": []}
+            persons_n = machines_n = zones_n = 0
+            risk_level = "SAFE"
             live = frame
 
             try:
-                # Hazard YOLO + ByteTrack (persist IDs across frames)
-                detections = hazard_detector.track(frame, persist=True)
-
-                if not args.disable_filters:
-                    detections = filter_detections(detections, frame_shape=frame.shape[:2])
-                    detections = track_confirmation.update(detections, frame_shape=frame.shape[:2])
-
-                persons = hazard_detector.extract_persons(detections)
-                machines = hazard_detector.extract_machines(detections)
-
-                fire_detections = []
-                if fire_detector is not None:
-                    raw_fire = fire_detector.predict(frame)
-                    fire_detections = fire_tracker.update(raw_fire)
-
-                result = engine.analyze(
-                    detections=detections,
-                    persons=persons,
-                    machines=machines,
-                    fire_detections=fire_detections,
-                    frame_width=float(frame.shape[1]),
-                )
-
-                live = draw_safety_overlay(
-                    frame, result, detections, hazard_detector.class_names
-                )
+                fr = pipeline.process_frame(frame, track=True, draw=True)
+                live = fr.annotated
+                persons_n = len(fr.persons)
+                machines_n = len(fr.machines)
+                zones_n = len(fr.result.get("danger_zones", []))
+                risk_level = fr.result.get("risk_level", "SAFE")
             except Exception as exc:  # noqa: BLE001
-                print(f"  [FRAME {frame_index}] pipeline failed: {exc}", file=sys.stderr)
+                print(f"  pipeline failed: {exc}", file=sys.stderr)
 
+            frame_count += 1
             now = time.time()
             elapsed = now - t0
             if elapsed >= 0.5:
-                fps = frame_index / elapsed if elapsed else 0.0
-                frame_index = 0
+                fps = frame_count / elapsed if elapsed else 0.0
+                frame_count = 0
                 t0 = now
 
             hud = (
-                f"LIVE  {fps:.1f} FPS  |  persons={len(persons)}  "
-                f"machines={len(machines)}  "
-                f"zones={len(result.get('danger_zones', []))}  "
-                f"|  {result.get('risk_level', 'SAFE')}   [Q quit]"
+                f"LIVE  {fps:.1f} FPS  |  persons={persons_n}  machines={machines_n}  "
+                f"zones={zones_n}  |  {risk_level}   [Q quit]"
             )
             cv2.putText(
                 live, hud, (12, live.shape[0] - 16),

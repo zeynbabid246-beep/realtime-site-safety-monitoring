@@ -101,8 +101,68 @@ def calculate_proximity_distance(
     return bbox_separation(person_bbox, machine_bbox)
 
 
+# ============================================================
+# CALIBRATION-FREE PERSPECTIVE (DEPTH-AWARE) DISTANCE
+# ============================================================
+# A pure pixel gap is unreliable: two objects near the horizon can be
+# 20px apart yet 30m apart in reality, while two foreground objects can
+# be 200px apart yet only 1m apart. Without a calibrated camera we can
+# still recover an approximate real-world scale from the ONE thing whose
+# true size we know: a standing human.
+#
+# A person's bounding-box height in pixels corresponds to roughly
+# ASSUMED_PERSON_HEIGHT_M metres at THAT person's depth, so
+#     px_per_m = person_height_px / ASSUMED_PERSON_HEIGHT_M
+# is a per-frame, depth-aware scale. Dividing the edge-to-edge pixel gap
+# by px_per_m gives an approximate distance in metres that no longer
+# collapses to nothing just because two distant objects sit close
+# together in the image.
+#
+# This assumes the person and the machine are at a similar depth, which
+# holds in exactly the case we care about (they are near each other).
+# When they are far apart the estimate is rough - but we do not alert
+# then anyway.
+
+DEFAULT_ASSUMED_PERSON_HEIGHT_M = 1.7
+MIN_PERSON_HEIGHT_PX = 8.0  # below this the px-per-metre scale is too noisy to trust
+
+
+def calculate_perspective_distance(
+    person_bbox: List[float],
+    machine_bbox: List[float],
+    assumed_person_height_m: float = DEFAULT_ASSUMED_PERSON_HEIGHT_M,
+) -> Tuple[Optional[float], Optional[float]]:
+    """
+    Depth-aware person↔machine proximity estimate in metres.
+
+    Returns (distance_m_est, px_per_m), or (None, None) when the person
+    box is too small/degenerate to give a trustworthy scale (callers
+    should then fall back to the pixel-gap threshold).
+    """
+
+    try:
+        _, py1, _, py2 = _validate_bbox(person_bbox)
+    except (ValueError, TypeError):
+        return None, None
+
+    person_height_px = float(py2) - float(py1)
+    if person_height_px < MIN_PERSON_HEIGHT_PX or assumed_person_height_m <= 0:
+        return None, None
+
+    px_per_m = person_height_px / float(assumed_person_height_m)
+
+    try:
+        gap_px = bbox_separation(person_bbox, machine_bbox)
+    except (ValueError, TypeError):
+        return None, None
+
+    return gap_px / px_per_m, px_per_m
+
+
 def find_closest_machine(
-    person_bbox: List[float], machines: List[Dict]
+    person_bbox: List[float],
+    machines: List[Dict],
+    assumed_person_height_m: float = DEFAULT_ASSUMED_PERSON_HEIGHT_M,
 ) -> Optional[Dict]:
     """
     Find the closest detected machine to a person.
@@ -110,9 +170,15 @@ def find_closest_machine(
     Expected machines format:
         [{"class_name": "Excavator", "confidence": 0.91, "bbox": [...]}]
 
-    Returns a copy of the closest machine dict with a "distance_px" key
-    added (also aliased as "distance" for backward compatibility), or
-    None if no valid machine bbox is available.
+    Returns a copy of the closest machine dict with distance keys added
+    ("distance_px"/"distance" pixel gap, "ground_distance_px", and the
+    depth-aware "distance_m_est"/"px_per_m"), or None if no valid machine
+    bbox is available.
+
+    Ranking is by pixel gap. The perspective scale (px_per_m) depends only
+    on the person box, so it is identical for every candidate machine and
+    would not change the ordering - ranking by pixels is therefore exactly
+    as correct and cheaper.
     """
 
     if not machines:
@@ -135,18 +201,25 @@ def find_closest_machine(
 
         if distance < minimum_distance:
             minimum_distance = distance
+            distance_m_est, px_per_m = calculate_perspective_distance(
+                person_bbox, bbox, assumed_person_height_m
+            )
             closest_machine = {
                 **machine,
                 "distance_px": distance,
                 "distance": distance,  # deprecated alias
                 "ground_distance_px": ground_distance,
+                "distance_m_est": distance_m_est,
+                "px_per_m": px_per_m,
             }
 
     return closest_machine
 
 
 def calculate_person_machine_distances(
-    persons: List[Dict], machines: List[Dict]
+    persons: List[Dict],
+    machines: List[Dict],
+    assumed_person_height_m: float = DEFAULT_ASSUMED_PERSON_HEIGHT_M,
 ) -> List[Dict]:
     """
     Calculate the closest machine for every tracked person.
@@ -163,7 +236,9 @@ def calculate_person_machine_distances(
                 "machine_bbox": [...],
                 "machine_confidence": 0.91,
                 "distance_px": 130.5,
-                "distance": 130.5,  # deprecated alias
+                "distance": 130.5,        # deprecated alias
+                "distance_m_est": 1.9,    # depth-aware estimate (None if unreliable)
+                "px_per_m": 68.7,         # person-height-derived scale
             }
         ]
     """
@@ -176,7 +251,9 @@ def calculate_person_machine_distances(
             continue
 
         try:
-            closest_machine = find_closest_machine(person_bbox, machines)
+            closest_machine = find_closest_machine(
+                person_bbox, machines, assumed_person_height_m
+            )
         except (ValueError, TypeError) as exc:
             logger.debug(
                 "Skipping person %s with malformed bbox %s: %s",
@@ -195,6 +272,8 @@ def calculate_person_machine_distances(
                     "machine_bbox": None,
                     "distance_px": None,
                     "distance": None,
+                    "distance_m_est": None,
+                    "px_per_m": None,
                 }
             )
             continue
@@ -209,6 +288,8 @@ def calculate_person_machine_distances(
                 "distance_px": closest_machine.get("distance_px"),
                 "distance": closest_machine.get("distance"),  # deprecated alias
                 "ground_distance_px": closest_machine.get("ground_distance_px"),
+                "distance_m_est": closest_machine.get("distance_m_est"),
+                "px_per_m": closest_machine.get("px_per_m"),
             }
         )
 

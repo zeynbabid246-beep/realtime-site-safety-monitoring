@@ -26,6 +26,7 @@ Python - see extract_persons() / extract_machines() below.
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -75,6 +76,13 @@ class HazardDetector:
         self.device = device
         self.class_names: Dict[int, str] = self.model.names
 
+        # A single model instance is shared across video jobs and websocket
+        # clients. ultralytics inference mutates internal predictor buffers
+        # and is NOT safe to call concurrently on the same object, so every
+        # forward pass is serialised behind this lock. RLock (reentrant)
+        # because track() falls back to predict() while still holding it.
+        self._lock = threading.RLock()
+
     # --------------------------------------------------------------
     # INFERENCE
     # --------------------------------------------------------------
@@ -90,15 +98,16 @@ class HazardDetector:
         """
 
         try:
-            results = self.model.track(
-                source=frame,
-                persist=persist,
-                tracker=self.tracker,
-                conf=self.confidence,
-                imgsz=self.image_size,
-                device=self.device,
-                verbose=False,
-            )
+            with self._lock:
+                results = self.model.track(
+                    source=frame,
+                    persist=persist,
+                    tracker=self.tracker,
+                    conf=self.confidence,
+                    imgsz=self.image_size,
+                    device=self.device,
+                    verbose=False,
+                )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Tracking failed on frame, falling back to detection: %s", exc)
             return self.predict(frame)
@@ -108,13 +117,14 @@ class HazardDetector:
     def predict(self, frame: np.ndarray) -> List[Dict[str, Any]]:
         """Run plain (untracked) detection on a single frame."""
 
-        results = self.model.predict(
-            source=frame,
-            conf=self.confidence,
-            imgsz=self.image_size,
-            device=self.device,
-            verbose=False,
-        )
+        with self._lock:
+            results = self.model.predict(
+                source=frame,
+                conf=self.confidence,
+                imgsz=self.image_size,
+                device=self.device,
+                verbose=False,
+            )
         return self._parse_result(results[0] if results else None)
 
     def _parse_result(self, result) -> List[Dict[str, Any]]:

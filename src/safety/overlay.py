@@ -269,13 +269,23 @@ def _draw_fire_detections_fallback(
 
 
 def _draw_proximity_lines(frame: np.ndarray, result: Dict[str, Any]) -> None:
-    """Draw person↔machine ground lines and pixel gap labels."""
+    """Draw person↔machine ground lines and gap labels (metres when available)."""
+
+    use_perspective = bool(result.get("use_perspective_distance"))
+    threshold_px = float(result.get("proximity_threshold_px", 250.0) or 250.0)
+    threshold_m = float(result.get("machine_distance_threshold_m", 2.5) or 2.5)
 
     for item in result.get("distance_results") or []:
         person_bbox = item.get("person_bbox")
         machine_bbox = item.get("machine_bbox")
-        distance = item.get("distance_px")
-        if person_bbox is None or machine_bbox is None or distance is None:
+        if person_bbox is None or machine_bbox is None:
+            continue
+
+        distance_px = item.get("distance_px")
+        distance_m = item.get("distance_m_est")
+
+        show_metres = use_perspective and distance_m is not None
+        if not show_metres and distance_px is None:
             continue
 
         try:
@@ -286,7 +296,13 @@ def _draw_proximity_lines(frame: np.ndarray, result: Dict[str, Any]) -> None:
         except (TypeError, ValueError):
             continue
 
-        close = distance <= float(result.get("proximity_threshold_px", 250.0) or 250.0)
+        if show_metres:
+            close = distance_m <= threshold_m
+            label = f"{distance_m:.1f}m"
+        else:
+            close = distance_px <= threshold_px
+            label = f"{distance_px:.0f}px"
+
         color = (0, 60, 255) if close else (180, 180, 180)
         cv2.line(frame, pt1, pt2, color, 2)
         cv2.circle(frame, pt1, 5, color, -1)
@@ -294,7 +310,7 @@ def _draw_proximity_lines(frame: np.ndarray, result: Dict[str, Any]) -> None:
         mid = ((pt1[0] + pt2[0]) // 2, (pt1[1] + pt2[1]) // 2)
         cv2.putText(
             frame,
-            f"{distance:.0f}px",
+            label,
             mid,
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
