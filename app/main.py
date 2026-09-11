@@ -662,5 +662,8 @@ SETTINGS.ensure_dirs()
 if SETTINGS.evidence_dir.exists():
     app.mount("/evidence", StaticFiles(directory=str(SETTINGS.evidence_dir)), name="evidence")
 
+OUTPUT_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/output", StaticFiles(directory=str(OUTPUT_VIDEO_DIR)), name="output")
+
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="static")
