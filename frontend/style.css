@@ -1,5 +1,5 @@
 /* =========================================================
-   DESIGN TOKENS - Blue & White Theme
+   DESIGN TOKENS - Modern Production Safety Theme (Blue & Slate)
 ========================================================= */
 
 :root {
@@ -55,7 +55,7 @@
 
     --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
     --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
-    --shadow-lg: 0 10px 25px -3px rgba(15, 23, 42, 0.1), 0 4px 10px -2px rgba(15, 23, 42, 0.05);
+    --shadow-lg: 0 12px 28px -4px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
 
     --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -138,7 +138,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-width: 380px;
+    max-width: 400px;
     width: calc(100vw - 40px);
     pointer-events: none;
 }
@@ -268,9 +268,18 @@ body {
     overflow-y: auto;
 }
 
+.modal-footer {
+    padding: 14px 24px;
+    border-top: 1px solid var(--slate-200);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: var(--slate-50);
+}
+
 .modal-media {
     width: 100%;
-    max-height: 500px;
+    max-height: 480px;
     object-fit: contain;
     background: var(--slate-900);
     border-radius: var(--radius-md);
@@ -316,12 +325,12 @@ body {
     align-items: center;
     justify-content: center;
     color: white;
-    box-shadow: 0 4px 12px rgba(12, 135, 235, 0.3);
+    box-shadow: 0 4px 12px rgba(12, 135, 235, 0.35);
     flex-shrink: 0;
 }
 
 .logo-text h1 {
-    font-size: 20px;
+    font-size: 19px;
     font-weight: 800;
     letter-spacing: -0.5px;
     line-height: 1.1;
@@ -442,6 +451,22 @@ body {
     box-shadow: 0 0 8px rgba(22, 163, 74, 0.6);
 }
 
+/* Sidebar Overlay for Mobile Drawer */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    z-index: 95;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
 
 /* =========================================================
    MAIN WRAPPER & HEADER
@@ -523,9 +548,10 @@ body {
     color: white;
     font-size: 10px;
     font-weight: 800;
-    width: 20px;
+    min-width: 20px;
     height: 20px;
-    border-radius: 50%;
+    padding: 0 4px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -800,6 +826,10 @@ body {
     cursor: pointer;
 }
 
+.search-input {
+    min-width: 180px;
+}
+
 .fps-badge {
     background: var(--blue-50);
     color: var(--blue-700);
@@ -840,14 +870,35 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
-    color: var(--slate-400);
-    padding: 40px;
+    gap: 12px;
+    color: var(--slate-300);
+    padding: 48px 24px;
     text-align: center;
+    max-width: 440px;
 }
 
-.camera-placeholder svg {
-    opacity: 0.4;
+.placeholder-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--blue-400);
+    margin-bottom: 8px;
+}
+
+.camera-placeholder h4 {
+    font-size: 18px;
+    font-weight: 700;
+    color: white;
+}
+
+.camera-placeholder p {
+    font-size: 13px;
+    color: var(--slate-400);
+    line-height: 1.5;
 }
 
 .camera-footer {
@@ -880,7 +931,7 @@ body {
 
 
 /* =========================================================
-   STATS & DETECTION CARDS
+   STATS & DETECTION CARDS (6 Grid layout)
 ========================================================= */
 
 .stats-grid {
@@ -889,14 +940,18 @@ body {
     gap: 16px;
 }
 
+.stats-grid.grid-6 {
+    grid-template-columns: repeat(6, 1fr);
+}
+
 .stat-card {
     background: white;
     border: 1px solid var(--slate-200);
     border-radius: var(--radius-lg);
-    padding: 20px;
+    padding: 18px 16px;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
     box-shadow: var(--shadow-sm);
     transition: all var(--transition);
 }
@@ -907,8 +962,8 @@ body {
 }
 
 .stat-icon {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border-radius: var(--radius-md);
     display: flex;
     align-items: center;
@@ -920,6 +975,8 @@ body {
 .fire-icon { background: var(--red-50); color: var(--red-600); }
 .smoke-icon { background: var(--amber-50); color: var(--amber-600); }
 .people-icon { background: var(--slate-100); color: var(--blue-700); }
+.machine-icon { background: var(--blue-100); color: var(--blue-800); }
+.zone-icon { background: var(--orange-50); color: var(--orange-600); }
 
 .stat-info {
     display: flex;
@@ -937,7 +994,7 @@ body {
 }
 
 .stat-value {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     color: var(--slate-900);
     overflow: hidden;
@@ -1010,6 +1067,9 @@ body {
 }
 
 .media-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     padding: 10px 20px;
     border: none;
     background: transparent;
@@ -1057,10 +1117,27 @@ body {
     color: var(--blue-700);
 }
 
+.dropzone-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--blue-600);
+    box-shadow: var(--shadow-sm);
+}
+
 .dropzone-title {
     font-size: 16px;
     font-weight: 700;
     color: var(--slate-800);
+}
+
+.browse-link {
+    color: var(--blue-600);
+    text-decoration: underline;
 }
 
 .dropzone-sub {
@@ -1123,6 +1200,11 @@ body {
     padding: 20px;
 }
 
+.video-actions-bar {
+    display: flex;
+    justify-content: flex-end;
+}
+
 
 /* =========================================================
    ALERT FEED & HISTORY TABLE
@@ -1180,6 +1262,12 @@ body {
     color: var(--slate-600);
 }
 
+.alert-ack {
+    color: var(--green-700);
+    font-weight: 700;
+    font-size: 13px;
+}
+
 .table-container {
     overflow-x: auto;
 }
@@ -1207,6 +1295,24 @@ body {
 
 .data-table tbody tr:hover {
     background: var(--blue-50);
+}
+
+.table-footer {
+    padding: 12px 24px;
+    border-top: 1px solid var(--slate-100);
+    font-size: 12px;
+    color: var(--slate-500);
+    text-align: right;
+}
+
+.thumb-link {
+    color: var(--blue-600);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.thumb-link:hover {
+    text-decoration: underline;
 }
 
 
@@ -1330,7 +1436,7 @@ body {
 }
 
 .kv .k { font-size: 12px; color: var(--slate-500); font-weight: 600; }
-.kv .v { font-size: 26px; font-weight: 800; color: var(--slate-900); margin-top: 4px; }
+.kv .v { font-size: 24px; font-weight: 800; color: var(--slate-900); margin-top: 4px; }
 
 
 /* =========================================================
@@ -1365,6 +1471,10 @@ body {
    RESPONSIVE DESIGN
 ========================================================= */
 
+@media (max-width: 1200px) {
+    .stats-grid.grid-6 { grid-template-columns: repeat(3, 1fr); }
+}
+
 @media (max-width: 1024px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
     .split-grid { grid-template-columns: 1fr; }
@@ -1379,5 +1489,5 @@ body {
     .top-header { padding: 0 16px; }
     .content { padding: 20px 16px; }
     .risk-banner { flex-direction: column; align-items: flex-start; }
-    .stats-grid { grid-template-columns: 1fr; }
+    .stats-grid, .stats-grid.grid-6 { grid-template-columns: 1fr; }
 }
