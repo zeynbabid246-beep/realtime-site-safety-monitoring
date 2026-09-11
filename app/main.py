@@ -149,15 +149,64 @@ app.add_middleware(
 
 
 # ============================================================
-# LOAD MODELS (once, at startup)
+# LOAD MODELS (once, at startup with fallback if missing)
 # ============================================================
 
-logger.info("Loading hazard model...")
-hazard_detector = HazardDetector(HAZARD_MODEL_PATH, confidence=0.25, image_size=640)
+class DummyHazardDetector:
+    HARDHAT = 0
+    MASK = 1
+    NO_HARDHAT = 2
+    NO_MASK = 3
+    NO_SAFETY_VEST = 4
+    PERSON_CLASS = 5
+    CONE_CLASS = 6
+    SAFETY_VEST = 7
+    MACHINERY_CLASS = 8
+    UTILITY_POLE_CLASS = 9
+    VEHICLE_CLASS = 10
+
+    def __init__(self, *args, **kwargs):
+        self.class_names = {
+            0: "Hardhat", 1: "Mask", 2: "NO-Hardhat", 3: "NO-Mask", 4: "NO-Safety Vest",
+            5: "Person", 6: "Safety Cone", 7: "Safety Vest", 8: "machinery",
+            9: "utility pole", 10: "vehicle"
+        }
+
+    def track(self, frame: np.ndarray, persist: bool = True) -> List[Dict[str, Any]]:
+        return []
+
+    def predict(self, frame: np.ndarray) -> List[Dict[str, Any]]:
+        return []
+
+    def extract_persons(self, detections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return []
+
+    def extract_machines(self, detections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return []
+
+
+class DummyFireDetector:
+    def __init__(self, *args, **kwargs):
+        self.class_names = {0: "Fire", 1: "Smoke"}
+
+    def predict(self, frame: np.ndarray) -> List[Dict[str, Any]]:
+        return []
+
+
+if HAZARD_MODEL_PATH.exists():
+    logger.info("Loading hazard model...")
+    hazard_detector = HazardDetector(HAZARD_MODEL_PATH, confidence=0.25, image_size=640)
+else:
+    logger.warning("Hazard model weights not found at %s. Using DummyHazardDetector.", HAZARD_MODEL_PATH)
+    hazard_detector = DummyHazardDetector()
 logger.info("Hazard classes: %s", hazard_detector.class_names)
 
-logger.info("Loading fire/smoke model...")
-fire_detector = FireDetector(FIRE_MODEL_PATH, confidence=0.35, image_size=416)
+if FIRE_MODEL_PATH.exists():
+    logger.info("Loading fire/smoke model...")
+    fire_detector = FireDetector(FIRE_MODEL_PATH, confidence=0.35, image_size=416)
+else:
+    logger.warning("Fire/smoke model weights not found at %s. Using DummyFireDetector.", FIRE_MODEL_PATH)
+    fire_detector = DummyFireDetector()
 logger.info("Fire/smoke classes: %s", fire_detector.class_names)
 
 DEFAULT_SAFETY_CONFIG = SafetyConfig()
