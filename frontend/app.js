@@ -49,6 +49,7 @@ const ctx = canvas.getContext("2d");
 const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
 const fpsCounter = document.getElementById("fpsCounter");
+const cameraSourceSelect = document.getElementById("cameraSourceSelect");
 
 const connectionStatus = document.getElementById("connectionStatus");
 const cameraMessage = document.getElementById("cameraMessage");
@@ -65,6 +66,8 @@ const ppeStatus = document.getElementById("ppeStatus");
 const fireStatus = document.getElementById("fireStatus");
 const smokeStatus = document.getElementById("smokeStatus");
 const personStatus = document.getElementById("personStatus");
+const machineStatus = document.getElementById("machineStatus");
+const zoneStatus = document.getElementById("zoneStatus");
 
 const proximityList = document.getElementById("proximityList");
 const zoneList = document.getElementById("zoneList");
@@ -113,10 +116,10 @@ let audioCtx = null;
 
 const PAGE_TITLES = {
     dashboard: ["Dashboard", "Real-time safety monitoring, tracking, and hazard detection"],
-    detection: ["Media Analysis", "Inspect images and process video streams for safety violations"],
-    alerts: ["Alert Feed", "High and critical site safety alerts"],
+    detection: ["Media Analysis", "Inspect job site photos and process video feeds"],
+    alerts: ["Alert Feed", "High and critical safety violations needing acknowledgment"],
     history: ["Event History", "Complete safety event audit trail"],
-    statistics: ["Statistics", "Aggregated safety metrics and site trends"],
+    statistics: ["Statistics", "Aggregated safety metrics and site incident trends"],
     evidence: ["Evidence Gallery", "Captured event snapshots and video recordings"],
     reports: ["Safety Reports", "Generate and export regulatory site compliance reports"],
 };
@@ -166,6 +169,26 @@ async function getJson(path) {
     const res = await fetch(apiUrl(path), { headers: { "Accept": "application/json" } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
+}
+
+
+// ============================================================
+// CAMERA SOURCE ENUMERATION
+// ============================================================
+
+async function populateCameraDevices() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter(d => d.kind === "videoinput");
+        if (cameraSourceSelect && videoInputs.length > 0) {
+            cameraSourceSelect.innerHTML = videoInputs.map((d, i) => `
+                <option value="${escapeHtml(d.deviceId)}">${escapeHtml(d.label || `Camera ${i + 1}`)}</option>
+            `).join("");
+        }
+    } catch (e) {
+        console.debug("Camera device enumeration failed:", e);
+    }
 }
 
 
@@ -250,6 +273,11 @@ if (lightboxModal) {
         if (e.target === lightboxModal) closeLightbox();
     });
 }
+window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !lightboxModal.classList.contains("hidden")) {
+        closeLightbox();
+    }
+});
 
 
 // ============================================================
@@ -330,11 +358,34 @@ function updateDetectionUI(summary, detections) {
         // Worker Card Status
         if (personStatus) {
             if (summary.person_count > 0) {
-                personStatus.textContent = `${summary.person_count} Tracked Worker(s)`;
+                personStatus.textContent = `${summary.person_count} Tracked`;
                 personStatus.style.color = "#026aa7";
             } else {
                 personStatus.textContent = "None";
                 personStatus.style.color = "#64748b";
+            }
+        }
+
+        // Machinery Card Status
+        if (machineStatus) {
+            if (summary.machine_count > 0) {
+                machineStatus.textContent = `${summary.machine_count} Equipment`;
+                machineStatus.style.color = "#035588";
+            } else {
+                machineStatus.textContent = "None";
+                machineStatus.style.color = "#64748b";
+            }
+        }
+
+        // Danger Zones Card Status
+        if (zoneStatus) {
+            const zoneCount = (summary.danger_zones || []).length;
+            if (zoneCount > 0) {
+                zoneStatus.textContent = `${zoneCount} Active Zone(s)`;
+                zoneStatus.style.color = "#ea580c";
+            } else {
+                zoneStatus.textContent = "0 Active";
+                zoneStatus.style.color = "#16a34a";
             }
         }
 
@@ -401,9 +452,14 @@ function updateDetectionUI(summary, detections) {
 async function startCamera() {
     try {
         cameraMessage.textContent = "Requesting site camera permission...";
+        const deviceId = cameraSourceSelect ? cameraSourceSelect.value : "default";
+
+        const videoConstraints = deviceId && deviceId !== "default"
+            ? { deviceId: { exact: deviceId }, width: 640, height: 480 }
+            : { width: 640, height: 480 };
 
         cameraStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 640, height: 480 },
+            video: videoConstraints,
             audio: false,
         });
 
@@ -420,7 +476,7 @@ async function startCamera() {
     } catch (error) {
         console.error("Camera error:", error);
         cameraMessage.textContent = "Could not access the site camera.";
-        showToast("Camera Error", "Camera access denied or unavailable", "HIGH");
+        showToast("Camera Error", "Camera access denied or device unavailable", "HIGH");
     }
 }
 
@@ -553,6 +609,8 @@ function stopCamera() {
     smokeStatus.style.color = "";
     personStatus.textContent = "None";
     personStatus.style.color = "";
+    if (machineStatus) machineStatus.textContent = "None";
+    if (zoneStatus) zoneStatus.textContent = "0 Active";
 
     if (riskBadge) {
         const valueEl = riskBadge.querySelector(".risk-value");
@@ -572,8 +630,12 @@ function stopCamera() {
 const mediaTabBtns = document.querySelectorAll(".media-tab-btn");
 mediaTabBtns.forEach(btn => {
     btn.addEventListener("click", () => {
-        mediaTabBtns.forEach(b => b.classList.remove("active"));
+        mediaTabBtns.forEach(b => {
+            b.classList.remove("active");
+            b.setAttribute("aria-selected", "false");
+        });
         btn.classList.add("active");
+        btn.setAttribute("aria-selected", "true");
         const type = btn.dataset.mediatab;
         document.getElementById("media-view-image").classList.toggle("hidden", type !== "image");
         document.getElementById("media-view-video").classList.toggle("hidden", type !== "video");
@@ -640,14 +702,13 @@ async function handleImageUpload(file) {
         }
 
         const summary = data.result.summary || {};
-        const detections = data.result.detections || [];
 
         // Set Annotated Image URL
         imageAnnotatedPreview.src = outputUrl(data.annotated_image_path);
 
         // Render Summary Details
         imageSummaryCard.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
                 <h4 style="font-size: 16px; font-weight: 700; color: var(--slate-900);">Safety Analysis Summary</h4>
                 ${riskPill(summary.risk_level)}
             </div>
@@ -657,8 +718,8 @@ async function handleImageUpload(file) {
                 <div class="kv"><div class="k">Tracked Workers</div><div class="v">${summary.person_count || 0}</div></div>
                 <div class="kv"><div class="k">Machinery Detected</div><div class="v">${summary.machine_count || 0}</div></div>
             </div>
-            <div>
-                <strong>Violation Types:</strong> ${escapeHtml(violationSummary(summary.violation_counts))}
+            <div style="font-size: 13px; color: var(--slate-700);">
+                <strong>Violation Breakdown:</strong> ${escapeHtml(violationSummary(summary.violation_counts))}
             </div>
         `;
 
@@ -666,7 +727,7 @@ async function handleImageUpload(file) {
         imageResultContainer.classList.remove("hidden");
         imageDropzone.classList.remove("hidden");
 
-        showToast("Image Processed", `Detection completed. Risk Level: ${summary.risk_level || 'SAFE'}`, summary.risk_level === "CRITICAL" ? "CRITICAL" : "HIGH");
+        showToast("Image Analysis Complete", `Risk Level: ${summary.risk_level || 'SAFE'} (${summary.violation_count || 0} violation(s))`, summary.risk_level === "CRITICAL" ? "CRITICAL" : "HIGH");
 
     } catch (err) {
         console.error("Image upload error:", err);
@@ -734,8 +795,8 @@ async function handleVideoUpload(file) {
         const framesProcessed = res.headers.get("X-Frames-Processed") || "—";
         const maxRisk = res.headers.get("X-Max-Risk-Level") || "SAFE";
 
-        videoResultPlayer.onerror = (e) => {
-            console.error("Video player error:", videoResultPlayer.error);
+        videoResultPlayer.onerror = () => {
+            console.error("Video player load error");
         };
         videoResultPlayer.src = videoUrl;
         videoResultPlayer.load();
@@ -748,8 +809,8 @@ async function handleVideoUpload(file) {
                 ${riskPill(maxRisk)}
             </div>
             <div class="kv-grid">
-                <div class="kv"><div class="k">Frames Processed</div><div class="v">${framesProcessed}</div></div>
-                <div class="kv"><div class="k">Peak Risk Index</div><div class="v">${escapeHtml(maxRisk)}</div></div>
+                <div class="kv"><div class="k">Frames Monitored</div><div class="v">${framesProcessed}</div></div>
+                <div class="kv"><div class="k">Peak Risk Level</div><div class="v">${escapeHtml(maxRisk)}</div></div>
             </div>
         `;
 
@@ -757,7 +818,7 @@ async function handleVideoUpload(file) {
         videoResultContainer.classList.remove("hidden");
         videoDropzone.classList.remove("hidden");
 
-        showToast("Video Processing Complete", `Successfully analyzed ${framesProcessed} video frames`, "HIGH");
+        showToast("Video Processing Complete", `Successfully analyzed ${framesProcessed} frames`, "HIGH");
 
     } catch (err) {
         console.error("Video processing error:", err);
@@ -830,7 +891,7 @@ if (audioToggleBtn) {
         audioEnabled = !audioEnabled;
         audioIconOn.classList.toggle("hidden", !audioEnabled);
         audioIconOff.classList.toggle("hidden", audioEnabled);
-        audioStatusText.textContent = audioEnabled ? "Audio On" : "Audio Off";
+        audioStatusText.textContent = audioEnabled ? "Audio Alerts On" : "Audio Alerts Off";
         if (audioEnabled) playAlertSound(600, "sine", 0.1);
     });
 }
@@ -850,10 +911,10 @@ async function loadAlertBadge() {
         if (navAlertBadge) navAlertBadge.textContent = display;
 
         if (n > 0) {
-            if (alertBadge) alertBadge.classList.remove("hidden");
+            if (alertBadgeCount) alertBadgeCount.classList.remove("hidden");
             if (navAlertBadge) navAlertBadge.classList.remove("hidden");
         } else {
-            if (alertBadge) alertBadge.classList.add("hidden");
+            if (alertBadgeCount) alertBadgeCount.classList.add("hidden");
             if (navAlertBadge) navAlertBadge.classList.add("hidden");
         }
     } catch (err) {
@@ -902,7 +963,7 @@ async function loadAlerts() {
         });
 
     } catch (err) {
-        list.innerHTML = `<div class="empty">Could not load alerts (${escapeHtml(err.message)}).</div>`;
+        list.innerHTML = `<div class="empty-state"><p>Could not load alerts (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
@@ -915,15 +976,33 @@ async function ackAlert(id) {
     }
 }
 
+async function ackAllAlerts() {
+    try {
+        const data = await getJson("/api/alerts?limit=100&status=new");
+        const alerts = data.alerts || [];
+        await Promise.all(alerts.map(a => fetch(apiUrl(`/api/alerts/${a.id}/ack`), { method: "POST" })));
+        showToast("Alerts Acknowledged", `Acknowledged ${alerts.length} active alert(s)`, "HIGH");
+        await Promise.all([loadAlerts(), loadAlertBadge()]);
+    } catch (err) {
+        console.error("Ack All failed:", err);
+    }
+}
+
+const ackAllBtn = document.getElementById("ackAllAlerts");
+if (ackAllBtn) ackAllBtn.addEventListener("click", ackAllAlerts);
+
 
 // ============================================================
-// HISTORY TAB
+// HISTORY TAB WITH SEARCH FILTER
 // ============================================================
+
+let cachedHistoryEvents = [];
 
 async function loadHistory() {
     const body = document.getElementById("historyBody");
     const risk = document.getElementById("historyRiskFilter").value;
     const source = document.getElementById("historySourceFilter").value;
+    const search = (document.getElementById("historySearch")?.value || "").toLowerCase().trim();
 
     const params = new URLSearchParams({ limit: "200" });
     if (risk) params.set("risk", risk);
@@ -931,50 +1010,76 @@ async function loadHistory() {
 
     try {
         const data = await getJson(`/api/events?${params.toString()}`);
-        const events = data.events || [];
+        cachedHistoryEvents = data.events || [];
 
-        if (events.length === 0) {
-            body.innerHTML = '<tr><td colspan="8"><div class="empty">No recorded safety events matching filters.</div></td></tr>';
-            return;
-        }
-
-        body.innerHTML = events.map(e => {
-            const img = e.evidence_image ? `<a href="#" class="thumb-link" data-img="${evidenceUrl(e.evidence_image)}" data-id="${e.id}">Snapshot</a>` : "";
-            const clip = e.evidence_clip ? `<a href="#" class="thumb-link" data-clip="${evidenceUrl(e.evidence_clip)}" data-id="${e.id}">Video Clip</a>` : "";
-            const evidence = [img, clip].filter(Boolean).join(" · ") || "—";
-            return `
-                <tr>
-                    <td>${fmtTime(e.ts)}</td>
-                    <td><strong>${escapeHtml(e.source)}</strong></td>
-                    <td>${riskPill(e.risk_level)}</td>
-                    <td>${escapeHtml(violationSummary(e.violation_counts))}</td>
-                    <td>${e.persons ?? 0}</td>
-                    <td>${e.fire ?? 0}</td>
-                    <td>${e.smoke ?? 0}</td>
-                    <td>${evidence}</td>
-                </tr>
-            `;
-        }).join("");
-
-        body.querySelectorAll("a[data-img], a[data-clip]").forEach(link => {
-            link.addEventListener("click", (e) => {
-                e.preventDefault();
-                const img = link.dataset.img;
-                const clip = link.dataset.clip;
-                const id = link.dataset.id;
-                let mediaHtml = "";
-                if (clip) {
-                    mediaHtml = `<video class="modal-media" src="${clip}" controls autoplay></video>`;
-                } else if (img) {
-                    mediaHtml = `<img class="modal-media" src="${img}" alt="Event #${id}">`;
-                }
-                openLightbox(`Event #${id} Evidence Detail`, `Captured snapshot/recording`, mediaHtml);
-            });
-        });
+        renderFilteredHistory(search);
 
     } catch (err) {
-        body.innerHTML = `<tr><td colspan="8"><div class="empty">Could not load event history (${escapeHtml(err.message)}).</div></td></tr>`;
+        body.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>Could not load event history (${escapeHtml(err.message)})</p></div></td></tr>`;
     }
+}
+
+function renderFilteredHistory(searchQuery) {
+    const body = document.getElementById("historyBody");
+    const countEl = document.getElementById("historyCount");
+
+    let events = cachedHistoryEvents;
+    if (searchQuery) {
+        events = events.filter(e => {
+            const vStr = JSON.stringify(e.violation_counts || {}).toLowerCase();
+            const src = (e.source || "").toLowerCase();
+            const rk = (e.risk_level || "").toLowerCase();
+            return vStr.includes(searchQuery) || src.includes(searchQuery) || rk.includes(searchQuery);
+        });
+    }
+
+    if (countEl) countEl.textContent = `${events.length} event(s) recorded`;
+
+    if (events.length === 0) {
+        body.innerHTML = '<tr><td colspan="8"><div class="empty-state"><p>No recorded safety events matching filters</p></div></td></tr>';
+        return;
+    }
+
+    body.innerHTML = events.map(e => {
+        const img = e.evidence_image ? `<a href="#" class="thumb-link" data-img="${evidenceUrl(e.evidence_image)}" data-id="${e.id}">Snapshot</a>` : "";
+        const clip = e.evidence_clip ? `<a href="#" class="thumb-link" data-clip="${evidenceUrl(e.evidence_clip)}" data-id="${e.id}">Video Clip</a>` : "";
+        const evidence = [img, clip].filter(Boolean).join(" · ") || "—";
+        return `
+            <tr>
+                <td>${fmtTime(e.ts)}</td>
+                <td><strong>${escapeHtml(e.source)}</strong></td>
+                <td>${riskPill(e.risk_level)}</td>
+                <td>${escapeHtml(violationSummary(e.violation_counts))}</td>
+                <td>${e.persons ?? 0}</td>
+                <td>${e.fire ?? 0}</td>
+                <td>${e.smoke ?? 0}</td>
+                <td>${evidence}</td>
+            </tr>
+        `;
+    }).join("");
+
+    body.querySelectorAll("a[data-img], a[data-clip]").forEach(link => {
+        link.addEventListener("click", (e) => {
+            e.preventDefault();
+            const img = link.dataset.img;
+            const clip = link.dataset.clip;
+            const id = link.dataset.id;
+            let mediaHtml = "";
+            if (clip) {
+                mediaHtml = `<video class="modal-media" src="${clip}" controls autoplay></video>`;
+            } else if (img) {
+                mediaHtml = `<img class="modal-media" src="${img}" alt="Event #${id}">`;
+            }
+            openLightbox(`Event #${id} Evidence Detail`, `Captured snapshot/recording`, mediaHtml);
+        });
+    });
+}
+
+const historySearchInput = document.getElementById("historySearch");
+if (historySearchInput) {
+    historySearchInput.addEventListener("input", (e) => {
+        renderFilteredHistory(e.target.value.toLowerCase().trim());
+    });
 }
 
 
@@ -987,7 +1092,7 @@ function barChart(container, entries, colorFn) {
     const items = entries.filter(([, v]) => v > 0);
 
     if (items.length === 0) {
-        el.innerHTML = '<div class="empty">No data available for this range.</div>';
+        el.innerHTML = '<div class="empty-state"><p>No data available for selected range</p></div>';
         return;
     }
 
@@ -1018,8 +1123,8 @@ async function loadStatistics() {
             ["Recorded Events", t.events ?? 0],
             ["Generated Alerts", t.alerts ?? 0],
             ["Unacknowledged Alerts", t.alerts_unacknowledged ?? 0],
-            ["Frames Processed", t.frames_processed ?? 0],
-            ["Captured Snapshots", t.events_with_image ?? 0],
+            ["Frames Monitored", t.frames_processed ?? 0],
+            ["Snapshots Captured", t.events_with_image ?? 0],
             ["Video Recordings", t.events_with_clip ?? 0],
         ].map(([label, value]) => `
             <div class="stat-card">
@@ -1038,7 +1143,7 @@ async function loadStatistics() {
         barChart("dayChart", Object.entries(r.by_day || {}));
 
     } catch (err) {
-        cards.innerHTML = `<div class="empty">Could not load statistics (${escapeHtml(err.message)}).</div>`;
+        cards.innerHTML = `<div class="empty-state"><p>Could not load statistics (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
@@ -1103,7 +1208,7 @@ async function loadEvidence() {
         });
 
     } catch (err) {
-        gallery.innerHTML = `<div class="empty">Could not load evidence gallery (${escapeHtml(err.message)}).</div>`;
+        gallery.innerHTML = `<div class="empty-state"><p>Could not load evidence gallery (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
@@ -1156,7 +1261,7 @@ async function loadReport() {
             <div style="margin-bottom: 24px;">
                 <h3 style="font-size: 16px; font-weight: 700; color: var(--slate-800); margin-bottom: 12px;">Events by Input Source</h3>
                 <div class="kv-grid">
-                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<div class="empty">No source data available.</div>'}
+                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<div class="empty-state"><p>No source data available</p></div>'}
                 </div>
             </div>
 
@@ -1167,14 +1272,14 @@ async function loadReport() {
                         <thead>
                             <tr><th>Time</th><th>Source</th><th>Risk Level</th><th>Violations</th><th>Detail</th></tr>
                         </thead>
-                        <tbody>${topRows || '<tr><td colspan="5"><div class="empty">No severe incidents recorded.</div></td></tr>'}</tbody>
+                        <tbody>${topRows || '<tr><td colspan="5"><div class="empty-state"><p>No severe incidents recorded</p></div></td></tr>'}</tbody>
                     </table>
                 </div>
             </div>
         `;
 
     } catch (err) {
-        summary.innerHTML = `<div class="empty">Could not generate report (${escapeHtml(err.message)}).</div>`;
+        summary.innerHTML = `<div class="empty-state"><p>Could not generate report (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
@@ -1224,5 +1329,6 @@ document.getElementById("reportRange").addEventListener("change", loadReport);
 
 
 // INIT
+populateCameraDevices();
 loadAlertBadge();
 startPolling();

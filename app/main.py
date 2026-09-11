@@ -149,20 +149,73 @@ app.add_middleware(
 
 
 # ============================================================
+# DUMMY FALLBACK DETECTORS (for running server without weights)
+# ============================================================
+
+class DummyHazardDetector:
+    HARDHAT = 0
+    MASK = 1
+    NO_HARDHAT = 2
+    NO_MASK = 3
+    NO_SAFETY_VEST = 4
+    PERSON_CLASS = 5
+    CONE_CLASS = 6
+    SAFETY_VEST = 7
+    MACHINERY_CLASS = 8
+    UTILITY_POLE_CLASS = 9
+    VEHICLE_CLASS = 10
+
+    def __init__(self):
+        self.class_names = {
+            0: "Hardhat", 1: "Mask", 2: "NO-Hardhat", 3: "NO-Mask",
+            4: "NO-Safety Vest", 5: "Person", 6: "Safety Cone",
+            7: "Safety Vest", 8: "machinery", 9: "utility pole", 10: "vehicle"
+        }
+
+    def track(self, frame: np.ndarray, persist: bool = True) -> List[Dict[str, Any]]:
+        return []
+
+    def predict(self, frame: np.ndarray) -> List[Dict[str, Any]]:
+        return []
+
+    def extract_persons(self, detections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return []
+
+    def extract_machines(self, detections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return []
+
+
+class DummyFireDetector:
+    def __init__(self):
+        self.class_names = {0: "Fire", 1: "Smoke"}
+
+    def predict(self, frame: np.ndarray) -> List[Dict[str, Any]]:
+        return []
+
+
+# ============================================================
 # LOAD MODELS (once, at startup)
 # ============================================================
 
-logger.info("Loading hazard model...")
-hazard_detector = HazardDetector(HAZARD_MODEL_PATH, confidence=0.25, image_size=640)
-logger.info("Hazard classes: %s", hazard_detector.class_names)
+try:
+    logger.info("Loading hazard model from %s...", HAZARD_MODEL_PATH)
+    hazard_detector = HazardDetector(HAZARD_MODEL_PATH, confidence=0.25, image_size=640)
+    logger.info("Hazard classes: %s", hazard_detector.class_names)
+except Exception as exc:
+    logger.warning("Hazard model weights missing or failed to load (%s); using DummyHazardDetector fallback.", exc)
+    hazard_detector = DummyHazardDetector()
 
-logger.info("Loading fire/smoke model...")
-fire_detector = FireDetector(FIRE_MODEL_PATH, confidence=0.35, image_size=416)
-logger.info("Fire/smoke classes: %s", fire_detector.class_names)
+try:
+    logger.info("Loading fire/smoke model from %s...", FIRE_MODEL_PATH)
+    fire_detector = FireDetector(FIRE_MODEL_PATH, confidence=0.35, image_size=416)
+    logger.info("Fire/smoke classes: %s", fire_detector.class_names)
+except Exception as exc:
+    logger.warning("Fire/smoke model weights missing or failed to load (%s); using DummyFireDetector fallback.", exc)
+    fire_detector = DummyFireDetector()
 
 DEFAULT_SAFETY_CONFIG = SafetyConfig()
 
-logger.info("Models loaded successfully.")
+logger.info("Models initialized.")
 
 
 # ============================================================
