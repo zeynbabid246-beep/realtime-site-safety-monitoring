@@ -28,7 +28,7 @@ function apiUrl(path) {
 
 function outputUrl(path) {
     if (!path) return null;
-    const filename = path.split("/").pop();
+    const filename = path.split(/[\\/]/).pop();
     return apiUrl(`/output/${filename}`);
 }
 

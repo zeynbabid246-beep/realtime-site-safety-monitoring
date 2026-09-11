@@ -354,6 +354,7 @@ def summarize_result(result: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "risk_level": result.get("risk_level", "SAFE"),
         "violation_count": result.get("violation_count", 0),
+        "violation_counts": dict(violation_counts),
         "ppe_violations": ppe_violations,
         "fire_count": fire_count,
         "smoke_count": smoke_count,
