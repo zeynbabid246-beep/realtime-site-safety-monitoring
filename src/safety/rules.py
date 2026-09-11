@@ -79,8 +79,16 @@ class SafetyConfig:
     assumed_person_height_m: float = 1.7
     machine_distance_threshold_m: float = 2.5
 
-    # Minimum confidence for explicit PPE violations.
-    violation_confidence: float = 0.30
+    # Minimum confidence for explicit PPE violations (generic floor).
+    # NO_SAFETY_VEST has an additional, stricter per-class floor applied
+    # inside get_ppe_violations() - see NO_VEST_MIN_CONFIDENCE below.
+    violation_confidence: float = 0.35
+
+    # Stricter confidence floor specifically for NO_SAFETY_VEST: bright
+    # high-vis vests produce split detections where the model outputs
+    # both SAFETY_VEST (high conf) and NO_SAFETY_VEST (low conf) on the
+    # same torso. This higher floor discards the weak false-violation leg.
+    no_vest_min_confidence: float = 0.50
 
     # Cone clustering.
     cone_min_cluster_size: int = 3
@@ -330,8 +338,8 @@ def get_ppe_violations(
 
     violations: List[Dict[str, Any]] = []
 
-    # Pre-filter once: only NO_HARDHAT / NO_SAFETY_VEST detections above
-    # the confidence threshold are ever relevant.
+    # Pre-filter once: only NO_HARDHAT / NO_SAFETY_VEST / NO_MASK above
+    # the confidence threshold are relevant for violations.
     relevant_detections = []
     for detection in detections:
         class_id = detection_class(detection)
@@ -339,7 +347,17 @@ def get_ppe_violations(
             continue
 
         confidence = detection_confidence(detection)
-        if confidence < config.violation_confidence:
+
+        # NO_SAFETY_VEST uses a stricter per-class floor: bright hi-vis vests
+        # often produce a low-confidence NO_SAFETY_VEST alongside a high-
+        # confidence SAFETY_VEST on the same torso. The extra floor discards
+        # that weak false-violation leg before it reaches matching.
+        if class_id == NO_SAFETY_VEST:
+            min_conf = max(config.violation_confidence, config.no_vest_min_confidence)
+        else:
+            min_conf = config.violation_confidence
+
+        if confidence < min_conf:
             continue
 
         bbox = detection_bbox(detection)
@@ -371,6 +389,34 @@ def get_ppe_violations(
                 "torso_region": torso_region,
             }
         )
+
+    # ------------------------------------------------------------------
+    # SAFETY_VEST cancellation: for each person build a set of track_ids
+    # that already have a confirmed SAFETY_VEST on their torso. Any
+    # NO_SAFETY_VEST violation for the same person will be suppressed.
+    # This is the primary fix for workers in bright hi-vis vests where the
+    # model simultaneously outputs SAFETY_VEST (high conf) and NO_SAFETY_VEST
+    # (lower conf) on the same torso region.
+    # ------------------------------------------------------------------
+    protected_track_ids: set = set()
+    for detection in detections:
+        if detection_class(detection) != SAFETY_VEST:
+            continue
+        vest_conf = detection_confidence(detection)
+        if vest_conf < 0.40:  # only count a reasonably confident positive vest
+            continue
+        vest_bbox = detection_bbox(detection)
+        if vest_bbox is None:
+            continue
+
+        for pr in person_regions:
+            try:
+                overlap = bbox_overlap_ratio(vest_bbox, pr["torso_region"])
+            except (TypeError, ValueError):
+                continue
+            if overlap >= config.ppe_overlap_threshold:
+                protected_track_ids.add(pr["track_id"])
+                break  # vest is claimed; move to next detection
 
     for class_id, confidence, bbox in relevant_detections:
         if class_id == NO_HARDHAT:
@@ -409,6 +455,11 @@ def get_ppe_violations(
                 best_person = person_region
 
         if best_person is None or best_overlap < config.ppe_overlap_threshold:
+            continue
+
+        # Suppress NO_SAFETY_VEST for any person who already has a confirmed
+        # SAFETY_VEST on their torso - the model is just confused by colour.
+        if class_id == NO_SAFETY_VEST and best_person["track_id"] in protected_track_ids:
             continue
 
         violations.append(

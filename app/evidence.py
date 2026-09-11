@@ -133,8 +133,11 @@ class ClipRecorder:
 
             stamp = time.strftime("%H%M%S")
             path = folder / f"{self.source}_{stamp}_clip.mp4"
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            fourcc = cv2.VideoWriter_fourcc(*"avc1")
             writer = cv2.VideoWriter(str(path), fourcc, self.fps, (w, h))
+            if not writer.isOpened():
+                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                writer = cv2.VideoWriter(str(path), fourcc, self.fps, (w, h))
             if not writer.isOpened():
                 logger.warning("Could not open VideoWriter for %s", path)
                 return False

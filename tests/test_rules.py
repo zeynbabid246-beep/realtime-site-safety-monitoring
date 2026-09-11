@@ -4,6 +4,7 @@ from src.safety.rules import (
     NO_HARDHAT,
     NO_MASK,
     NO_SAFETY_VEST,
+    SAFETY_VEST,
     SafetyConfig,
     calculate_risk_level,
     get_machine_distance_violations,
@@ -41,9 +42,29 @@ def test_no_hardhat_near_feet_is_not_a_violation():
 
 def test_no_safety_vest_matched_to_torso():
     # torso region = 15%..85% of height (y 145..355)
-    viols = get_ppe_violations([_person()], [_ppe(NO_SAFETY_VEST, [110, 200, 190, 300])], CONFIG)
+    viols = get_ppe_violations([_person()], [_ppe(NO_SAFETY_VEST, [110, 200, 190, 300], confidence=0.7)], CONFIG)
     assert len(viols) == 1
     assert viols[0]["type"] == "NO_SAFETY_VEST"
+
+
+def test_positive_safety_vest_cancels_no_safety_vest_on_same_person():
+    # When both SAFETY_VEST and NO_SAFETY_VEST are detected on the same person,
+    # the confirmed positive vest must protect the person from a false violation.
+    person = _person(1, (100, 100, 200, 400))
+    detections = [
+        _ppe(SAFETY_VEST, [110, 180, 190, 320], confidence=0.75),
+        _ppe(NO_SAFETY_VEST, [115, 190, 185, 310], confidence=0.60),
+    ]
+    viols = get_ppe_violations([person], detections, CONFIG)
+    assert viols == [], "Expected NO_SAFETY_VEST to be suppressed by confirmed SAFETY_VEST"
+
+
+def test_no_safety_vest_below_no_vest_min_confidence_is_ignored():
+    # A low-confidence NO_SAFETY_VEST (e.g. 0.45) is ignored under no_vest_min_confidence=0.50
+    person = _person(1, (100, 100, 200, 400))
+    detections = [_ppe(NO_SAFETY_VEST, [110, 200, 190, 300], confidence=0.45)]
+    viols = get_ppe_violations([person], detections, CONFIG)
+    assert viols == [], "Expected weak NO_SAFETY_VEST to be filtered by no_vest_min_confidence"
 
 
 def test_no_mask_is_low_severity():

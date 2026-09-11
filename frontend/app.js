@@ -727,14 +727,20 @@ async function handleVideoUpload(file) {
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        const blob = await res.blob();
-        const videoUrl = URL.createObjectURL(blob);
+        const rawBlob = await res.blob();
+        const videoBlob = new Blob([rawBlob], { type: "video/mp4" });
+        const videoUrl = URL.createObjectURL(videoBlob);
 
         const framesProcessed = res.headers.get("X-Frames-Processed") || "—";
         const maxRisk = res.headers.get("X-Max-Risk-Level") || "SAFE";
 
+        videoResultPlayer.onerror = (e) => {
+            console.error("Video player error:", videoResultPlayer.error);
+        };
         videoResultPlayer.src = videoUrl;
+        videoResultPlayer.load();
         videoDownloadBtn.href = videoUrl;
+        videoDownloadBtn.download = "safety_analysis.mp4";
 
         videoSummaryCard.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
