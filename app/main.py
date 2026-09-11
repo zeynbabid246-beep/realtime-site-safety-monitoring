@@ -195,6 +195,40 @@ def _prune_old_outputs(directory: Path = OUTPUT_VIDEO_DIR, keep: int = MAX_OUTPU
             logger.debug("Could not prune %s: %s", stale, exc)
 
 
+import subprocess
+
+
+def _convert_to_h264(raw_path: Path, h264_path: Path) -> bool:
+    """
+    Convert raw OpenCV mp4v video to web-standard H.264 MP4 format so HTML5
+    <video> elements in web browsers can play it natively.
+    """
+    try:
+        try:
+            import imageio_ffmpeg
+            ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        except ImportError:
+            ffmpeg_exe = shutil.which("ffmpeg")
+
+        if not ffmpeg_exe:
+            logger.warning("Neither imageio_ffmpeg nor system ffmpeg found; keeping raw mp4")
+            return False
+
+        cmd = [
+            ffmpeg_exe, "-y",
+            "-i", str(raw_path),
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-preset", "ultrafast",
+            str(h264_path),
+        ]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        return True
+    except Exception as exc:
+        logger.warning("H.264 conversion failed: %s", exc)
+        return False
+
+
 def _build_payload(result: Dict[str, Any], detections: List[Dict[str, Any]]) -> Dict[str, Any]:
     """The stable JSON contract shared by the image and websocket endpoints."""
 
@@ -376,6 +410,7 @@ async def detect_safety_video(file: UploadFile = File(...)):
 
     video_id = str(uuid.uuid4())
     input_path = OUTPUT_VIDEO_DIR / f"{video_id}_input.mp4"
+    raw_output_path = OUTPUT_VIDEO_DIR / f"{video_id}_raw.mp4"
     output_path = OUTPUT_VIDEO_DIR / f"{video_id}_safety.mp4"
 
     with open(input_path, "wb") as buffer:
@@ -386,12 +421,19 @@ async def detect_safety_video(file: UploadFile = File(...)):
     pipeline = SafetyPipeline(hazard_detector, fire_detector, config=DEFAULT_SAFETY_CONFIG)
     monitor = _new_monitor("video")
 
-    summary = await run_in_threadpool(_process_video_file, input_path, output_path, pipeline, monitor)
+    summary = await run_in_threadpool(_process_video_file, input_path, raw_output_path, pipeline, monitor)
     input_path.unlink(missing_ok=True)
 
     if not summary.get("opened"):
-        output_path.unlink(missing_ok=True)
+        raw_output_path.unlink(missing_ok=True)
         return {"success": False, "error": "Could not open video"}
+
+    converted = await run_in_threadpool(_convert_to_h264, raw_output_path, output_path)
+    if not converted or not output_path.exists():
+        if raw_output_path.exists():
+            shutil.move(raw_output_path, output_path)
+    else:
+        raw_output_path.unlink(missing_ok=True)
 
     _prune_old_outputs()
     prune_evidence(SETTINGS.evidence_dir, SETTINGS.max_evidence_files)

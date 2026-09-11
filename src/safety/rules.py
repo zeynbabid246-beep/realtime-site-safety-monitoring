@@ -330,23 +330,25 @@ def get_ppe_violations(
 
     violations: List[Dict[str, Any]] = []
 
-    # Pre-filter once: only NO_HARDHAT / NO_SAFETY_VEST detections above
-    # the confidence threshold are ever relevant.
+    # Gather positive PPE detections (HARDHAT, SAFETY_VEST, MASK)
+    # to avoid false negative violations when both positive and
+    # negative PPE detections exist on the same person.
+    positive_detections = []
     relevant_detections = []
+
     for detection in detections:
         class_id = detection_class(detection)
-        if class_id not in (NO_HARDHAT, NO_SAFETY_VEST, NO_MASK):
-            continue
-
         confidence = detection_confidence(detection)
-        if confidence < config.violation_confidence:
-            continue
-
         bbox = detection_bbox(detection)
         if bbox is None:
             continue
 
-        relevant_detections.append((class_id, confidence, bbox))
+        if class_id in (HARDHAT, SAFETY_VEST, MASK):
+            if confidence >= 0.20:
+                positive_detections.append((class_id, confidence, bbox))
+        elif class_id in (NO_HARDHAT, NO_SAFETY_VEST, NO_MASK):
+            if confidence >= config.violation_confidence:
+                relevant_detections.append((class_id, confidence, bbox))
 
     if not relevant_detections or not persons:
         return violations
@@ -364,11 +366,35 @@ def get_ppe_violations(
         except (TypeError, ValueError):
             continue
 
+        pos_hardhat_conf = 0.0
+        pos_vest_conf = 0.0
+        pos_mask_conf = 0.0
+
+        for pos_cls, pos_conf, pos_box in positive_detections:
+            try:
+                if pos_cls == SAFETY_VEST:
+                    ov = bbox_overlap_ratio(pos_box, torso_region)
+                    if ov >= config.ppe_overlap_threshold:
+                        pos_vest_conf = max(pos_vest_conf, pos_conf)
+                elif pos_cls == HARDHAT:
+                    ov = bbox_overlap_ratio(pos_box, head_region)
+                    if ov >= config.ppe_overlap_threshold:
+                        pos_hardhat_conf = max(pos_hardhat_conf, pos_conf)
+                elif pos_cls == MASK:
+                    ov = bbox_overlap_ratio(pos_box, head_region)
+                    if ov >= config.ppe_overlap_threshold:
+                        pos_mask_conf = max(pos_mask_conf, pos_conf)
+            except (TypeError, ValueError):
+                continue
+
         person_regions.append(
             {
                 "track_id": get_track_id(person),
                 "head_region": head_region,
                 "torso_region": torso_region,
+                "pos_hardhat_conf": pos_hardhat_conf,
+                "pos_vest_conf": pos_vest_conf,
+                "pos_mask_conf": pos_mask_conf,
             }
         )
 
@@ -378,16 +404,19 @@ def get_ppe_violations(
             violation_type = "NO_HARDHAT"
             message_suffix = "is not wearing a hardhat"
             severity = "MEDIUM"
+            pos_key = "pos_hardhat_conf"
         elif class_id == NO_SAFETY_VEST:
             region_key = "torso_region"
             violation_type = "NO_SAFETY_VEST"
             message_suffix = "is not wearing a safety vest"
             severity = "MEDIUM"
+            pos_key = "pos_vest_conf"
         elif class_id == NO_MASK:
             region_key = "head_region"
             violation_type = "NO_MASK"
             message_suffix = "is not wearing a mask"
             severity = "LOW"
+            pos_key = "pos_mask_conf"
         else:
             continue
 
@@ -397,9 +426,6 @@ def get_ppe_violations(
         for person_region in person_regions:
             region = person_region[region_key]
             try:
-                # Fraction of the PPE box that falls inside the
-                # anatomical region (bbox_a=PPE box, so the ratio is
-                # relative to the PPE box's own area).
                 overlap = bbox_overlap_ratio(bbox, region)
             except (TypeError, ValueError):
                 continue
@@ -409,6 +435,13 @@ def get_ppe_violations(
                 best_person = person_region
 
         if best_person is None or best_overlap < config.ppe_overlap_threshold:
+            continue
+
+        # If a positive PPE detection exists for this person in the region
+        # with comparable or higher confidence (or solid confidence >= 0.35),
+        # suppress false negative violation.
+        pos_conf = best_person.get(pos_key, 0.0)
+        if pos_conf >= (confidence - 0.15) or pos_conf >= 0.35:
             continue
 
         violations.append(

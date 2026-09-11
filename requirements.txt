@@ -11,3 +11,4 @@ uvicorn
 python-multipart
 shapely
 scikit-learn
+imageio-ffmpeg
