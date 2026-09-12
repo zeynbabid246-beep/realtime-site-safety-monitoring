@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Construction Safety AI - Real-time Monitoring & Detection Platform</title>
+    <title>Construction Safety AI - Real-Time Site Intelligence & Monitoring Platform</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
+    <!-- Accessibility Skip Link -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
 
     <!-- Notification Toast Container -->
     <div id="toastContainer" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
 
-    <!-- Evidence Lightbox Modal -->
+    <!-- Evidence & Incident Lightbox Modal -->
     <div id="lightboxModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <div class="modal-content">
             <div class="modal-header">
@@ -29,7 +29,7 @@
                 </button>
             </div>
             <div class="modal-body" id="modalBody">
-                <!-- Dynamically populated -->
+                <!-- Dynamically populated by app.js -->
             </div>
         </div>
     </div>
@@ -58,7 +58,7 @@
                     <rect x="3" y="14" width="7" height="7" rx="1.5"/>
                     <rect x="14" y="14" width="7" height="7" rx="1.5"/>
                 </svg>
-                <span>Dashboard</span>
+                <span>Live Dashboard</span>
             </button>
             <button class="nav-item" role="tab" aria-selected="false" aria-controls="panel-detection" id="tab-detection" data-tab="detection">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -72,7 +72,7 @@
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                     <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
                 </svg>
-                <span>Alerts</span>
+                <span>Alert Feed</span>
                 <span class="nav-badge hidden" id="navAlertBadge">0</span>
             </button>
             <button class="nav-item" role="tab" aria-selected="false" aria-controls="panel-history" id="tab-history" data-tab="history">
@@ -80,7 +80,7 @@
                     <circle cx="12" cy="12" r="10"/>
                     <polyline points="12 6 12 12 16 14"/>
                 </svg>
-                <span>History</span>
+                <span>Audit History</span>
             </button>
             <button class="nav-item" role="tab" aria-selected="false" aria-controls="panel-statistics" id="tab-statistics" data-tab="statistics">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -88,7 +88,7 @@
                     <line x1="12" y1="20" x2="12" y2="4"/>
                     <line x1="6" y1="20" x2="6" y2="14"/>
                 </svg>
-                <span>Statistics</span>
+                <span>Statistics & KPIs</span>
             </button>
             <button class="nav-item" role="tab" aria-selected="false" aria-controls="panel-evidence" id="tab-evidence" data-tab="evidence">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -96,7 +96,7 @@
                     <circle cx="8.5" cy="8.5" r="1.5"/>
                     <polyline points="21 15 16 10 5 21"/>
                 </svg>
-                <span>Evidence</span>
+                <span>Evidence Gallery</span>
             </button>
             <button class="nav-item" role="tab" aria-selected="false" aria-controls="panel-reports" id="tab-reports" data-tab="reports">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -105,7 +105,7 @@
                     <line x1="16" y1="13" x2="8" y2="13"/>
                     <line x1="16" y1="17" x2="8" y2="17"/>
                 </svg>
-                <span>Reports</span>
+                <span>Safety Reports</span>
             </button>
         </nav>
 
@@ -120,7 +120,7 @@
                     <line x1="23" y1="9" x2="17" y2="15"/>
                     <line x1="17" y1="9" x2="23" y2="15"/>
                 </svg>
-                <span id="audioStatusText">Audio On</span>
+                <span id="audioStatusText">Audio Alerts On</span>
             </button>
 
             <div class="connection-indicator" id="connectionStatus" title="WebSocket status">
@@ -130,9 +130,9 @@
         </div>
     </aside>
 
-    <!-- Main Content -->
+    <!-- Main Content Area Wrapper -->
     <div class="main-wrapper">
-        <!-- Top Header Bar -->
+        <!-- Top Sticky Header -->
         <header class="top-header">
             <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle navigation menu">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -143,8 +143,8 @@
             </button>
 
             <div class="header-title">
-                <h2 id="pageTitle">Dashboard</h2>
-                <p id="pageSubtitle">Real-time safety monitoring, tracking, and hazard detection</p>
+                <h2 id="pageTitle">Live Dashboard</h2>
+                <p id="pageSubtitle">Real-time site safety surveillance, ByteTrack IDs, danger zones, and proximity monitoring</p>
             </div>
 
             <div class="header-actions">
@@ -158,15 +158,15 @@
             </div>
         </header>
 
-        <!-- Main Content Area -->
+        <!-- Main Workspace -->
         <main class="content" id="main-content" tabIndex="-1">
 
-            <!-- Live Safety Risk HUD Banner -->
+            <!-- Real-Time Site Risk HUD Banner -->
             <div id="riskBanner" class="risk-banner banner-SAFE" role="region" aria-label="Real-time Risk Status">
                 <div class="banner-status">
                     <span class="banner-indicator"></span>
                     <div class="banner-text">
-                        <span class="banner-label">CURRENT RISK LEVEL</span>
+                        <span class="banner-label">SITE RISK LEVEL</span>
                         <h3 id="bannerRiskValue">SAFE</h3>
                     </div>
                 </div>
@@ -192,20 +192,28 @@
 
             <!-- Dashboard Panel -->
             <section class="tab-panel active" id="panel-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
-                <!-- Live Camera Section -->
+
+                <!-- Live Camera Feed & Canvas HUD Card -->
                 <div class="card camera-card">
                     <div class="card-header">
                         <div class="card-title-group">
-                            <h3>Live Site Feed & Spatial HUD</h3>
-                            <p>Real-time YOLO object detection, ByteTrack tracking IDs, and proximity vectors</p>
+                            <h3>Live Site Camera & Spatial HUD</h3>
+                            <p>Real-time YOLO multi-model object detection, ByteTrack persistent IDs, and ground proximity vectors</p>
                         </div>
                         <div class="card-actions">
                             <span class="fps-badge hidden" id="fpsCounter">0 FPS</span>
+                            <button id="captureSnapshotBtn" class="btn btn-secondary btn-sm" disabled aria-label="Capture snapshot from live camera">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                    <circle cx="12" cy="13" r="4"/>
+                                </svg>
+                                Capture Frame
+                            </button>
                             <button id="startButton" class="btn btn-primary" aria-label="Start live webcam detection">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                     <polygon points="5 3 19 12 5 21 5 3"/>
                                 </svg>
-                                Start Camera
+                                Start Live Camera
                             </button>
                             <button id="stopButton" class="btn btn-danger" disabled aria-label="Stop live webcam detection">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -216,6 +224,24 @@
                         </div>
                     </div>
 
+                    <!-- Live Overlay Controls -->
+                    <div class="camera-controls-bar">
+                        <span>HUD Overlays:</span>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="toggleBboxes" checked> Bounding Boxes
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="toggleTrackIds" checked> Tracking IDs
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="toggleDangerZones" checked> Danger Zone Polygons
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="toggleProximity" checked> Proximity Vectors
+                        </label>
+                    </div>
+
+                    <!-- Video & Canvas Container -->
                     <div class="camera-container">
                         <video id="camera" autoplay playsinline muted></video>
                         <canvas id="resultCanvas"></canvas>
@@ -224,20 +250,21 @@
                                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                                 <circle cx="12" cy="13" r="4"/>
                             </svg>
-                            <p>Click "Start Camera" or select Media Analysis to process streams</p>
+                            <p style="font-size: 16px; font-weight: 700; color: white;">Camera feed is currently offline</p>
+                            <p>Click "Start Live Camera" to begin real-time site surveillance</p>
                         </div>
                     </div>
 
                     <div class="camera-footer">
-                        <p id="cameraMessage" class="camera-message">Ready for real-time surveillance</p>
+                        <p id="cameraMessage" class="camera-message">Ready for real-time site monitoring</p>
                         <p id="riskBadge" class="risk-indicator">
-                            <span class="risk-label">RISK STATUS</span>
+                            <span class="risk-label">CURRENT RISK</span>
                             <span class="risk-value">—</span>
                         </p>
                     </div>
                 </div>
 
-                <!-- Detection Overview Cards -->
+                <!-- Detection Overview Cards (PPE, Fire, Smoke, Tracked Workers, Machinery, Zones) -->
                 <div class="stats-grid">
                     <div class="stat-card" id="ppeCard">
                         <div class="stat-icon ppe-icon">
@@ -291,15 +318,44 @@
                             <span class="stat-value" id="personStatus">None</span>
                         </div>
                     </div>
+
+                    <div class="stat-card" id="machineryCard">
+                        <div class="stat-icon machine-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+                                <circle cx="5.5" cy="18.5" r="2.5"/>
+                                <circle cx="18.5" cy="18.5" r="2.5"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Heavy Machinery</span>
+                            <span class="stat-value" id="machineryStatus">0 Units</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" id="zoneCard">
+                        <div class="stat-icon zone-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M12 2L2 22h20L12 2z"/>
+                                <line x1="12" y1="9" x2="12" y2="13"/>
+                                <line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Danger Zones</span>
+                            <span class="stat-value" id="zoneCountStatus">0 Active</span>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Ground Proximity & Danger Zone Grid -->
+                <!-- Proximity & Danger Zone Section -->
                 <div class="split-grid">
                     <div class="card">
                         <div class="card-header">
                             <div class="card-title-group">
                                 <h3>Worker Proximity Breaches</h3>
-                                <p>Heavy machinery and utility pole proximity vectors</p>
+                                <p>Heavy machinery and power pole proximity vectors</p>
                             </div>
                         </div>
                         <div id="proximityList" class="detail-list">
@@ -313,7 +369,7 @@
                         <div class="card-header">
                             <div class="card-title-group">
                                 <h3>Active Danger Zones</h3>
-                                <p>HDBSCAN clustered safety cone zone incursions</p>
+                                <p>Safety cone cluster zone incursions</p>
                             </div>
                         </div>
                         <div id="zoneList" class="detail-list">
@@ -328,8 +384,8 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title-group">
-                            <h3>Current Frame Detections & Tracking</h3>
-                            <p>Live object classifications with confidence and persistent tracking IDs</p>
+                            <h3>Current Frame Detections & ByteTrack IDs</h3>
+                            <p>Live classifications, confidence ratings, and persistent track IDs</p>
                         </div>
                     </div>
                     <div id="detectionList" class="detection-list">
@@ -339,7 +395,7 @@
                                 <line x1="12" y1="8" x2="12" y2="12"/>
                                 <line x1="12" y1="16" x2="12.01" y2="16"/>
                             </svg>
-                            <p>No detections yet</p>
+                            <p>No active detections in current frame</p>
                             <span>Start live camera or run media analysis</span>
                         </div>
                     </div>
@@ -358,33 +414,37 @@
                     <div class="card">
                         <div class="card-header">
                             <div class="card-title-group">
-                                <h3>Image Hazard Detection</h3>
-                                <p>Upload job site photos to inspect PPE compliance, danger zones, and equipment proximity</p>
+                                <h3>Job Site Image Hazard Detection</h3>
+                                <p>Upload site photos to analyze hardhats, safety vests, machinery proximity, and danger zones</p>
                             </div>
                         </div>
                         <div class="card-body">
                             <div class="dropzone" id="imageDropzone">
                                 <input type="file" id="imageFileInput" accept="image/*" class="file-input-hidden" aria-label="Upload site image">
                                 <div class="dropzone-content">
-                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                    <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                                         <circle cx="8.5" cy="8.5" r="1.5"/>
                                         <polyline points="21 15 16 10 5 21"/>
                                     </svg>
-                                    <p class="dropzone-title">Drag and drop site image here or click to browse</p>
-                                    <p class="dropzone-sub">Supports PNG, JPG, WEBP, BMP</p>
+                                    <p class="dropzone-title">Drag and drop job site photo here, or click to browse</p>
+                                    <p class="dropzone-sub">Supports PNG, JPG, WEBP, BMP formats (Max 25MB)</p>
                                 </div>
                             </div>
 
                             <div id="imageProcessingState" class="processing-state hidden">
                                 <div class="spinner"></div>
-                                <p>Processing image through Safety AI Pipeline...</p>
+                                <p style="font-size: 15px; font-weight: 700; color: var(--slate-800);">Processing image through Safety AI Pipeline...</p>
+                                <span class="processing-hint">Evaluating PPE compliance, spatial geometry, and risk indexes</span>
                             </div>
 
                             <div id="imageResultContainer" class="result-container hidden">
+                                <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+                                    <button id="resetImageBtn" class="btn btn-outline btn-sm">Upload Another Image</button>
+                                </div>
                                 <div class="result-media-grid">
                                     <div class="media-box">
-                                        <h4>Original Image</h4>
+                                        <h4>Original Image Upload</h4>
                                         <img id="imageOriginalPreview" alt="Original site upload">
                                     </div>
                                     <div class="media-box">
@@ -393,7 +453,7 @@
                                     </div>
                                 </div>
                                 <div class="result-summary-card" id="imageSummaryCard">
-                                    <!-- Populated by app.js -->
+                                    <!-- Dynamic breakdown -->
                                 </div>
                             </div>
                         </div>
@@ -406,31 +466,34 @@
                         <div class="card-header">
                             <div class="card-title-group">
                                 <h3>Offline Video Safety Analysis</h3>
-                                <p>Process full CCTV or drone footage through multi-model YOLO detection and ByteTrack tracking</p>
+                                <p>Process full CCTV, drone, or job site recordings through YOLO detection and ByteTrack tracking</p>
                             </div>
                         </div>
                         <div class="card-body">
                             <div class="dropzone" id="videoDropzone">
                                 <input type="file" id="videoFileInput" accept="video/mp4,video/avi,video/mov,video/mkv" class="file-input-hidden" aria-label="Upload site video">
                                 <div class="dropzone-content">
-                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                    <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                                         <polygon points="23 7 16 12 23 17 23 7"/>
                                         <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                                     </svg>
-                                    <p class="dropzone-title">Drag and drop site video here or click to browse</p>
-                                    <p class="dropzone-sub">Supports MP4, AVI, MOV, MKV</p>
+                                    <p class="dropzone-title">Drag and drop job site recording here, or click to browse</p>
+                                    <p class="dropzone-sub">Supports MP4, AVI, MOV, MKV formats</p>
                                 </div>
                             </div>
 
                             <div id="videoProcessingState" class="processing-state hidden">
                                 <div class="spinner"></div>
-                                <p>Analyzing video frames, evaluating danger zones, and rendering bounding overlays...</p>
-                                <span class="processing-hint">This may take a moment depending on video length.</span>
+                                <p style="font-size: 15px; font-weight: 700; color: var(--slate-800);">Analyzing video frames and rendering safety overlays...</p>
+                                <span class="processing-hint">This may take a moment depending on video length and framerate</span>
                             </div>
 
                             <div id="videoResultContainer" class="result-container hidden">
+                                <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+                                    <button id="resetVideoBtn" class="btn btn-outline btn-sm">Upload Another Video</button>
+                                </div>
                                 <div class="media-player-box">
-                                    <h4>Processed Video Output</h4>
+                                    <h4>Processed Annotated Video Output</h4>
                                     <video id="videoResultPlayer" controls playsinline></video>
                                 </div>
                                 <div class="video-actions-bar">
@@ -444,7 +507,7 @@
                                     </a>
                                 </div>
                                 <div class="result-summary-card" id="videoSummaryCard">
-                                    <!-- Populated by app.js -->
+                                    <!-- Dynamic summary -->
                                 </div>
                             </div>
                         </div>
@@ -458,15 +521,29 @@
                     <div class="card-header">
                         <div class="card-title-group">
                             <h3>Real-Time Alert Feed</h3>
-                            <p>HIGH and CRITICAL safety violations requiring immediate safety officer acknowledgment</p>
+                            <p>HIGH and CRITICAL safety violations requiring site officer acknowledgment</p>
                         </div>
                         <div class="card-actions">
                             <label for="alertStatusFilter" class="sr-only">Filter alert status</label>
                             <select id="alertStatusFilter" class="select-input">
-                                <option value="">All statuses</option>
-                                <option value="new">New / Unacknowledged</option>
+                                <option value="">All Statuses</option>
+                                <option value="new">Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+
+                            <label for="alertLevelFilter" class="sr-only">Filter alert level</label>
+                            <select id="alertLevelFilter" class="select-input">
+                                <option value="">All Risk Levels</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                                <option value="HIGH">HIGH</option>
+                                <option value="MEDIUM">MEDIUM</option>
+                                <option value="LOW">LOW</option>
+                            </select>
+
+                            <button id="ackAllAlertsBtn" class="btn btn-secondary btn-sm" aria-label="Acknowledge all alerts">
+                                Acknowledge All
+                            </button>
+
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -485,7 +562,7 @@
                 </div>
             </section>
 
-            <!-- History Panel -->
+            <!-- Audit History Panel -->
             <section class="tab-panel" id="panel-history" role="tabpanel" aria-labelledby="tab-history">
                 <div class="card">
                     <div class="card-header">
@@ -494,9 +571,11 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                            <input type="text" id="historySearchInput" class="text-input" placeholder="Search events..." aria-label="Search history events">
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
-                                <option value="">All risk levels</option>
+                                <option value="">All Risk Levels</option>
                                 <option value="LOW">LOW</option>
                                 <option value="MEDIUM">MEDIUM</option>
                                 <option value="HIGH">HIGH</option>
@@ -505,11 +584,13 @@
 
                             <label for="historySourceFilter" class="sr-only">Filter by source</label>
                             <select id="historySourceFilter" class="select-input">
-                                <option value="">All sources</option>
+                                <option value="">All Sources</option>
                                 <option value="camera">Camera</option>
                                 <option value="video">Video</option>
                                 <option value="image">Image</option>
                             </select>
+
+                            <button id="exportHistoryCsvBtn" class="btn btn-outline btn-sm">Export CSV</button>
 
                             <button id="refreshHistory" class="btn btn-secondary" aria-label="Refresh event history">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -524,14 +605,14 @@
                         <table class="data-table" id="historyTable">
                             <thead>
                                 <tr>
-                                    <th scope="col">Time</th>
+                                    <th scope="col">Timestamp</th>
                                     <th scope="col">Source</th>
-                                    <th scope="col">Risk Level</th>
-                                    <th scope="col">Violations</th>
+                                    <th scope="col">Risk Rating</th>
+                                    <th scope="col">Safety Violations</th>
                                     <th scope="col">Workers</th>
                                     <th scope="col">Fire</th>
                                     <th scope="col">Smoke</th>
-                                    <th scope="col">Evidence Media</th>
+                                    <th scope="col">Evidence</th>
                                 </tr>
                             </thead>
                             <tbody id="historyBody">
@@ -539,7 +620,7 @@
                                     <td colspan="8">
                                         <div class="loading-state">
                                             <div class="spinner"></div>
-                                            <p>Loading history events...</p>
+                                            <p>Loading audit log...</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -551,33 +632,43 @@
 
             <!-- Statistics Panel -->
             <section class="tab-panel" id="panel-statistics" role="tabpanel" aria-labelledby="tab-statistics">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title-group">
-                            <h3>Aggregate Statistics Overview</h3>
-                            <p>Metrics across frames, alerts, and captured incident evidence</p>
-                        </div>
-                        <div class="card-actions">
-                            <label for="statsRange" class="sr-only">Select statistics time range</label>
-                            <select id="statsRange" class="select-input">
-                                <option value="24h">Last 24 hours</option>
-                                <option value="7d">Last 7 days</option>
-                                <option value="30d">Last 30 days</option>
-                                <option value="all">All time</option>
-                            </select>
-                            <button id="refreshStats" class="btn btn-secondary" aria-label="Refresh statistics">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <polyline points="23 4 23 10 17 10"/>
-                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                                </svg>
-                                Refresh
-                            </button>
+                <!-- KPI Index & Overview -->
+                <div class="split-grid">
+                    <div class="kpi-card">
+                        <div>
+                            <div class="kpi-title">Site Safety Compliance Index</div>
+                            <div class="kpi-value" id="kpiScoreValue">98.5%</div>
+                            <div class="kpi-desc">Based on verified safe frames and incident frequency</div>
                         </div>
                     </div>
-                    <div class="stats-grid" id="statsCards">
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Analytics Time Period</h3>
+                            <div class="card-actions">
+                                <select id="statsRange" class="select-input">
+                                    <option value="24h">Last 24 Hours</option>
+                                    <option value="7d">Last 7 Days</option>
+                                    <option value="30d">Last 30 Days</option>
+                                    <option value="all">All Time</option>
+                                </select>
+                                <button id="refreshStats" class="btn btn-secondary">Refresh</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p style="font-size: 13px; color: var(--slate-600);">Aggregated metrics calculated across all continuous video passes, image uploads, and live camera streams.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Totals & Counter Summaries</h3>
+                    </div>
+                    <div class="stats-grid" id="statsCards" style="padding: 24px;">
                         <div class="loading-state">
                             <div class="spinner"></div>
-                            <p>Loading statistics...</p>
+                            <p>Loading metrics...</p>
                         </div>
                     </div>
                 </div>
@@ -591,7 +682,7 @@
 
                 <div class="card">
                     <div class="card-header">
-                        <h3>Top Violation Categories</h3>
+                        <h3>Top Safety Violation Categories</h3>
                     </div>
                     <div id="violationChart" class="chart-container"></div>
                 </div>
@@ -613,6 +704,13 @@
                             <p>Automated JPEG snapshots and rolling MP4 clips captured during HIGH/CRITICAL events</p>
                         </div>
                         <div class="card-actions">
+                            <label for="evidenceFilterType" class="sr-only">Filter evidence media type</label>
+                            <select id="evidenceFilterType" class="select-input">
+                                <option value="all">All Evidence Types</option>
+                                <option value="image">Snapshots Only</option>
+                                <option value="clip">Video Clips Only</option>
+                            </select>
+
                             <button id="refreshEvidence" class="btn btn-secondary" aria-label="Refresh evidence gallery">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -625,7 +723,7 @@
                     <div id="evidenceGallery" class="evidence-gallery">
                         <div class="loading-state">
                             <div class="spinner"></div>
-                            <p>Loading evidence gallery...</p>
+                            <p>Loading evidence items...</p>
                         </div>
                     </div>
                 </div>
@@ -637,16 +735,17 @@
                     <div class="card-header">
                         <div class="card-title-group">
                             <h3>Safety Audit Report Generator</h3>
-                            <p>Export regulatory site compliance data and event summaries in CSV or JSON format</p>
+                            <p>Export regulatory site compliance data and executive event summaries in CSV or JSON format</p>
                         </div>
                         <div class="card-actions">
                             <label for="reportRange" class="sr-only">Select report time range</label>
                             <select id="reportRange" class="select-input">
-                                <option value="24h">Last 24 hours</option>
-                                <option value="7d">Last 7 days</option>
-                                <option value="30d">Last 30 days</option>
-                                <option value="all">All time</option>
+                                <option value="24h">Last 24 Hours</option>
+                                <option value="7d">Last 7 Days</option>
+                                <option value="30d">Last 30 Days</option>
+                                <option value="all">All Time</option>
                             </select>
+
                             <button id="generateReport" class="btn btn-primary">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -654,6 +753,16 @@
                                 </svg>
                                 Generate Summary
                             </button>
+
+                            <button id="printReportBtn" class="btn btn-outline" onclick="window.print();">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <polyline points="6 9 6 2 18 2 18 9"/>
+                                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                                    <rect x="6" y="14" width="12" height="8"/>
+                                </svg>
+                                Print Report
+                            </button>
+
                             <a id="downloadJson" class="btn btn-outline" href="#" download="safety_report.json">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -662,6 +771,7 @@
                                 </svg>
                                 Export JSON
                             </a>
+
                             <a id="downloadCsv" class="btn btn-outline" href="#" download="safety_report.csv">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -679,7 +789,7 @@
                                 <polyline points="14 2 14 8 20 8"/>
                             </svg>
                             <p>Select time range and click Generate</p>
-                            <span>Exports include detailed event logs, risk indexes, and violation breakdowns</span>
+                            <span>Exports include event logs, risk indexes, and PPE violation breakdowns</span>
                         </div>
                     </div>
                 </div>
