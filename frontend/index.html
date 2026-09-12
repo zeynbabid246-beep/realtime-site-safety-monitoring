@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Construction Safety AI - Real-time Monitoring & Detection Platform</title>
+    <title>Construction Site Safety AI - Real-time Intelligence & Surveillance</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
+    <!-- Accessibility Skip Link -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
 
     <!-- Notification Toast Container -->
@@ -120,7 +120,7 @@
                     <line x1="23" y1="9" x2="17" y2="15"/>
                     <line x1="17" y1="9" x2="23" y2="15"/>
                 </svg>
-                <span id="audioStatusText">Audio On</span>
+                <span id="audioStatusText">Audio Alerts On</span>
             </button>
 
             <div class="connection-indicator" id="connectionStatus" title="WebSocket status">
@@ -130,7 +130,7 @@
         </div>
     </aside>
 
-    <!-- Main Content -->
+    <!-- Main Content Area -->
     <div class="main-wrapper">
         <!-- Top Header Bar -->
         <header class="top-header">
@@ -158,7 +158,7 @@
             </div>
         </header>
 
-        <!-- Main Content Area -->
+        <!-- Main Content Body -->
         <main class="content" id="main-content" tabIndex="-1">
 
             <!-- Live Safety Risk HUD Banner -->
@@ -192,7 +192,7 @@
 
             <!-- Dashboard Panel -->
             <section class="tab-panel active" id="panel-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
-                <!-- Live Camera Section -->
+                <!-- Live Surveillance Camera Section -->
                 <div class="card camera-card">
                     <div class="card-header">
                         <div class="card-title-group">
@@ -224,7 +224,7 @@
                                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                                 <circle cx="12" cy="13" r="4"/>
                             </svg>
-                            <p>Click "Start Camera" or select Media Analysis to process streams</p>
+                            <p>Click "Start Camera" or select Media Analysis to process site streams</p>
                         </div>
                     </div>
 
@@ -361,6 +361,9 @@
                                 <h3>Image Hazard Detection</h3>
                                 <p>Upload job site photos to inspect PPE compliance, danger zones, and equipment proximity</p>
                             </div>
+                            <div class="card-actions">
+                                <button type="button" class="btn btn-secondary hidden" id="resetImageBtn">Upload New Image</button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="dropzone" id="imageDropzone">
@@ -407,6 +410,9 @@
                             <div class="card-title-group">
                                 <h3>Offline Video Safety Analysis</h3>
                                 <p>Process full CCTV or drone footage through multi-model YOLO detection and ByteTrack tracking</p>
+                            </div>
+                            <div class="card-actions">
+                                <button type="button" class="btn btn-secondary hidden" id="resetVideoBtn">Upload New Video</button>
                             </div>
                         </div>
                         <div class="card-body">
@@ -461,12 +467,23 @@
                             <p>HIGH and CRITICAL safety violations requiring immediate safety officer acknowledgment</p>
                         </div>
                         <div class="card-actions">
+                            <div class="search-wrapper">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"/>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                </svg>
+                                <input type="text" id="alertSearchInput" class="text-input search-input" placeholder="Search alerts...">
+                            </div>
+
                             <label for="alertStatusFilter" class="sr-only">Filter alert status</label>
                             <select id="alertStatusFilter" class="select-input">
                                 <option value="">All statuses</option>
                                 <option value="new">New / Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+
+                            <button id="ackAllAlertsBtn" class="btn btn-primary">Acknowledge All</button>
+
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -494,6 +511,14 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                            <div class="search-wrapper">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"/>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                </svg>
+                                <input type="text" id="historySearchInput" class="text-input search-input" placeholder="Search history...">
+                            </div>
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
                                 <option value="">All risk levels</option>
@@ -678,7 +703,7 @@
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                                 <polyline points="14 2 14 8 20 8"/>
                             </svg>
-                            <p>Select time range and click Generate</p>
+                            <p>Select time range and click Generate Summary</p>
                             <span>Exports include detailed event logs, risk indexes, and violation breakdowns</span>
                         </div>
                     </div>
