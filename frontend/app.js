@@ -250,6 +250,11 @@ if (lightboxModal) {
         if (e.target === lightboxModal) closeLightbox();
     });
 }
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && lightboxModal && !lightboxModal.classList.contains("hidden")) {
+        closeLightbox();
+    }
+});
 
 
 // ============================================================
@@ -590,7 +595,16 @@ const imageAnnotatedPreview = document.getElementById("imageAnnotatedPreview");
 const imageSummaryCard = document.getElementById("imageSummaryCard");
 
 if (imageDropzone && imageFileInput) {
+    imageDropzone.setAttribute("tabindex", "0");
+    imageDropzone.setAttribute("role", "button");
+    imageDropzone.setAttribute("aria-label", "Upload site image dropzone");
     imageDropzone.addEventListener("click", () => imageFileInput.click());
+    imageDropzone.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            imageFileInput.click();
+        }
+    });
     imageDropzone.addEventListener("dragover", (e) => {
         e.preventDefault();
         imageDropzone.classList.add("dragover");
@@ -642,8 +656,14 @@ async function handleImageUpload(file) {
         const summary = data.result.summary || {};
         const detections = data.result.detections || [];
 
-        // Set Annotated Image URL
-        imageAnnotatedPreview.src = outputUrl(data.annotated_image_path);
+        // Set Annotated Image URL & Download Link
+        const annotatedImageSrc = outputUrl(data.annotated_image_path);
+        imageAnnotatedPreview.src = annotatedImageSrc;
+        const imageDownloadBtn = document.getElementById("imageDownloadBtn");
+        if (imageDownloadBtn) {
+            imageDownloadBtn.href = annotatedImageSrc;
+            imageDownloadBtn.classList.remove("hidden");
+        }
 
         // Render Summary Details
         imageSummaryCard.innerHTML = `
@@ -686,7 +706,16 @@ const videoDownloadBtn = document.getElementById("videoDownloadBtn");
 const videoSummaryCard = document.getElementById("videoSummaryCard");
 
 if (videoDropzone && videoFileInput) {
+    videoDropzone.setAttribute("tabindex", "0");
+    videoDropzone.setAttribute("role", "button");
+    videoDropzone.setAttribute("aria-label", "Upload site video dropzone");
     videoDropzone.addEventListener("click", () => videoFileInput.click());
+    videoDropzone.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            videoFileInput.click();
+        }
+    });
     videoDropzone.addEventListener("dragover", (e) => {
         e.preventDefault();
         videoDropzone.classList.add("dragover");
@@ -882,13 +911,13 @@ async function loadAlerts() {
             const acked = a.status === "acknowledged";
             const ackControl = acked
                 ? '<span class="alert-ack">✓ Acknowledged</span>'
-                : `<button class="btn btn-primary" data-ack="${a.id}">Acknowledge</button>`;
+                : `<button class="btn btn-primary" data-ack="${a.id}" aria-label="Acknowledge alert #${a.id}">Acknowledge</button>`;
             return `
                 <div class="alert-item level-${escapeHtml(a.level)}">
                     <div class="alert-main">
                         <div class="alert-title">${escapeHtml(a.title)}</div>
                         <div class="alert-meta">
-                            ${riskPill(a.level)} · ${fmtTime(a.ts)} · ${escapeHtml(a.channel)}${a.notified ? " · Notified" : ""}
+                            ${riskPill(a.level)} · ${fmtTime(a.ts)} · Source: ${escapeHtml(a.channel)}${a.notified ? " · Notified" : ""}
                         </div>
                         <div class="alert-message">${escapeHtml(a.message)}</div>
                     </div>
@@ -1015,17 +1044,24 @@ async function loadStatistics() {
         const t = r.totals || {};
 
         cards.innerHTML = [
-            ["Recorded Events", t.events ?? 0],
-            ["Generated Alerts", t.alerts ?? 0],
-            ["Unacknowledged Alerts", t.alerts_unacknowledged ?? 0],
-            ["Frames Processed", t.frames_processed ?? 0],
-            ["Captured Snapshots", t.events_with_image ?? 0],
-            ["Video Recordings", t.events_with_clip ?? 0],
-        ].map(([label, value]) => `
+            ["Recorded Events", t.events ?? 0, "ppe-icon"],
+            ["Generated Alerts", t.alerts ?? 0, "fire-icon"],
+            ["Unacknowledged Alerts", t.alerts_unacknowledged ?? 0, "smoke-icon"],
+            ["Frames Processed", t.frames_processed ?? 0, "people-icon"],
+            ["Captured Snapshots", t.events_with_image ?? 0, "ppe-icon"],
+            ["Video Recordings", t.events_with_clip ?? 0, "people-icon"],
+        ].map(([label, value, iconClass]) => `
             <div class="stat-card">
+                <div class="stat-icon ${iconClass}">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                </div>
                 <div class="stat-info">
-                    <span class="stat-value">${value}</span>
                     <span class="stat-label">${escapeHtml(label)}</span>
+                    <span class="stat-value">${value}</span>
                 </div>
             </div>
         `).join("");
