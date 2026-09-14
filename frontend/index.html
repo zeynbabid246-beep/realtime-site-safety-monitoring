@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Construction Safety AI - Real-time Monitoring & Detection Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -237,8 +240,8 @@
                     </div>
                 </div>
 
-                <!-- Detection Overview Cards -->
-                <div class="stats-grid">
+                <!-- Detection Overview Cards (5-card grid) -->
+                <div class="stats-grid stats-grid-5">
                     <div class="stat-card" id="ppeCard">
                         <div class="stat-icon ppe-icon">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -289,6 +292,22 @@
                         <div class="stat-info">
                             <span class="stat-label">Tracked Workers</span>
                             <span class="stat-value" id="personStatus">None</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" id="machineCard">
+                        <div class="stat-icon machine-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <rect x="2" y="6" width="20" height="8" rx="2"/>
+                                <path d="M17 14v4"/>
+                                <path d="M7 14v4"/>
+                                <circle cx="6" cy="18" r="2"/>
+                                <circle cx="18" cy="18" r="2"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Machinery Active</span>
+                            <span class="stat-value" id="machineStatus">None</span>
                         </div>
                     </div>
                 </div>
@@ -363,7 +382,7 @@
                             </div>
                         </div>
                         <div class="card-body">
-                            <div class="dropzone" id="imageDropzone">
+                            <div class="dropzone" id="imageDropzone" tabIndex="0" role="button" aria-label="Upload site image dropzone">
                                 <input type="file" id="imageFileInput" accept="image/*" class="file-input-hidden" aria-label="Upload site image">
                                 <div class="dropzone-content">
                                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -410,7 +429,7 @@
                             </div>
                         </div>
                         <div class="card-body">
-                            <div class="dropzone" id="videoDropzone">
+                            <div class="dropzone" id="videoDropzone" tabIndex="0" role="button" aria-label="Upload site video dropzone">
                                 <input type="file" id="videoFileInput" accept="video/mp4,video/avi,video/mov,video/mkv" class="file-input-hidden" aria-label="Upload site video">
                                 <div class="dropzone-content">
                                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -494,6 +513,10 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                            <div class="search-box">
+                                <input type="text" id="historySearchInput" placeholder="Search events..." class="text-input" aria-label="Search event history">
+                            </div>
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
                                 <option value="">All risk levels</option>
@@ -613,6 +636,12 @@
                             <p>Automated JPEG snapshots and rolling MP4 clips captured during HIGH/CRITICAL events</p>
                         </div>
                         <div class="card-actions">
+                            <div class="filter-group" role="group" aria-label="Evidence media filter">
+                                <button type="button" class="btn-filter active" data-evidencefilter="all">All Media</button>
+                                <button type="button" class="btn-filter" data-evidencefilter="snapshots">Snapshots</button>
+                                <button type="button" class="btn-filter" data-evidencefilter="clips">Video Clips</button>
+                            </div>
+
                             <button id="refreshEvidence" class="btn btn-secondary" aria-label="Refresh evidence gallery">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
