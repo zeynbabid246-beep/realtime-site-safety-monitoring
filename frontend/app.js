@@ -48,7 +48,13 @@ const ctx = canvas.getContext("2d");
 
 const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
+const snapshotBtn = document.getElementById("snapshotBtn");
+const fullscreenBtn = document.getElementById("fullscreenBtn");
+const cameraViewport = document.getElementById("cameraViewport");
+
 const fpsCounter = document.getElementById("fpsCounter");
+const resolutionBadge = document.getElementById("resolutionBadge");
+const liveRecordingDot = document.getElementById("liveRecordingDot");
 
 const connectionStatus = document.getElementById("connectionStatus");
 const cameraMessage = document.getElementById("cameraMessage");
@@ -60,15 +66,22 @@ const bannerViolations = document.getElementById("bannerViolations");
 const bannerWorkers = document.getElementById("bannerWorkers");
 const bannerProximity = document.getElementById("bannerProximity");
 const bannerZones = document.getElementById("bannerZones");
+const bannerMachinery = document.getElementById("bannerMachinery");
 
 const ppeStatus = document.getElementById("ppeStatus");
 const fireStatus = document.getElementById("fireStatus");
 const smokeStatus = document.getElementById("smokeStatus");
 const personStatus = document.getElementById("personStatus");
 
+const ppeSubtext = document.getElementById("ppeSubtext");
+const fireSubtext = document.getElementById("fireSubtext");
+const smokeSubtext = document.getElementById("smokeSubtext");
+const personSubtext = document.getElementById("personSubtext");
+
 const proximityList = document.getElementById("proximityList");
 const zoneList = document.getElementById("zoneList");
 const detectionList = document.getElementById("detectionList");
+const detectionFilterGroup = document.getElementById("detectionFilterGroup");
 
 const alertBadge = document.getElementById("alertBadge");
 const alertBadgeCount = document.getElementById("alertBadgeCount");
@@ -91,6 +104,10 @@ const lightboxModal = document.getElementById("lightboxModal");
 const closeModalBtn = document.getElementById("closeModalBtn");
 const modalBody = document.getElementById("modalBody");
 
+const riskLegendModal = document.getElementById("riskLegendModal");
+const riskLegendTriggerBtn = document.getElementById("riskLegendTriggerBtn");
+const closeRiskLegendBtn = document.getElementById("closeRiskLegendBtn");
+
 
 // ============================================================
 // STATE VARIABLES
@@ -104,6 +121,10 @@ let activeTab = "dashboard";
 let pollTimer = null;
 let audioEnabled = true;
 
+let currentFrameDetections = [];
+let currentDetectionFilter = "all";
+let currentEvidenceFilter = "all";
+
 // FPS Calculation
 let frameCount = 0;
 let lastFpsTime = performance.now();
@@ -112,26 +133,26 @@ let lastFpsTime = performance.now();
 let audioCtx = null;
 
 const PAGE_TITLES = {
-    dashboard: ["Dashboard", "Real-time safety monitoring, tracking, and hazard detection"],
-    detection: ["Media Analysis", "Inspect images and process video streams for safety violations"],
-    alerts: ["Alert Feed", "High and critical site safety alerts"],
-    history: ["Event History", "Complete safety event audit trail"],
-    statistics: ["Statistics", "Aggregated safety metrics and site trends"],
-    evidence: ["Evidence Gallery", "Captured event snapshots and video recordings"],
-    reports: ["Safety Reports", "Generate and export regulatory site compliance reports"],
+    dashboard: ["Live Dashboard", "Real-time safety monitoring, tracking, and hazard detection"],
+    detection: ["Media Analysis", "Inspect site photos and process full video streams for safety violations"],
+    alerts: ["Alert Feed", "High and critical site safety alerts requiring acknowledgment"],
+    history: ["Event History Log", "Complete safety event audit log with risk ratings and evidence"],
+    statistics: ["Analytics & Trends", "Aggregated safety metrics, frame counts, and violation distributions"],
+    evidence: ["Evidence Gallery", "Captured event JPEG snapshots and rolling video clip recordings"],
+    reports: ["Safety Audit Reports", "Generate and export regulatory site compliance reports"],
 };
 
 const RISK_COLORS = {
     SAFE: "#16a34a",
-    LOW: "#d97706",
+    LOW: "#ca8a04",
     MEDIUM: "#ea580c",
     HIGH: "#dc2626",
-    CRITICAL: "#b91c1c",
+    CRITICAL: "#991b1b",
 };
 
 
 // ============================================================
-// HELPERS
+// UTILITY & FORMATTING HELPERS
 // ============================================================
 
 function fmtTime(ts) {
@@ -155,7 +176,7 @@ function riskPill(level) {
 }
 
 function violationSummary(counts) {
-    if (!counts || typeof counts !== "object") return "—";
+    if (!counts || typeof counts !== "object") return "None";
     const parts = Object.entries(counts)
         .filter(([, v]) => v > 0)
         .map(([k, v]) => `${escapeHtml(k)}×${v}`);
@@ -170,10 +191,10 @@ async function getJson(path) {
 
 
 // ============================================================
-// AUDIO SYNTHESIZER
+// AUDIO SYNTHESIZER (Web Audio API)
 // ============================================================
 
-function playAlertSound(freq = 880, type = "sine", duration = 0.2) {
+function playAlertSound(freq = 880, type = "sine", duration = 0.25) {
     if (!audioEnabled) return;
     try {
         if (!audioCtx) {
@@ -186,14 +207,14 @@ function playAlertSound(freq = 880, type = "sine", duration = 0.2) {
         const gain = audioCtx.createGain();
         osc.type = type;
         osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start();
         osc.stop(audioCtx.currentTime + duration);
     } catch (e) {
-        console.debug("Audio play failed:", e);
+        console.debug("Audio synthesis skipped:", e);
     }
 }
 
@@ -218,15 +239,15 @@ function showToast(title, message, level = "HIGH") {
     setTimeout(() => toast.remove(), 6000);
 
     if (level === "CRITICAL") {
-        playAlertSound(987, "sawtooth", 0.3);
+        playAlertSound(987, "sawtooth", 0.35);
     } else if (level === "HIGH") {
-        playAlertSound(784, "sine", 0.2);
+        playAlertSound(784, "sine", 0.25);
     }
 }
 
 
 // ============================================================
-// LIGHTBOX MODAL
+// MODALS (Lightbox & Risk Guide)
 // ============================================================
 
 function openLightbox(title, subtitle, mediaHtml, detailHtml = "") {
@@ -251,9 +272,33 @@ if (lightboxModal) {
     });
 }
 
+function openRiskLegend() {
+    if (riskLegendModal) riskLegendModal.classList.remove("hidden");
+}
+
+function closeRiskLegend() {
+    if (riskLegendModal) riskLegendModal.classList.add("hidden");
+}
+
+if (riskLegendTriggerBtn) riskLegendTriggerBtn.addEventListener("click", openRiskLegend);
+if (closeRiskLegendBtn) closeRiskLegendBtn.addEventListener("click", closeRiskLegend);
+if (riskLegendModal) {
+    riskLegendModal.addEventListener("click", (e) => {
+        if (e.target === riskLegendModal) closeRiskLegend();
+    });
+}
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+        closeLightbox();
+        closeRiskLegend();
+        closeMobileMenu();
+    }
+});
+
 
 // ============================================================
-// UI UPDATE HELPERS (Live Camera HUD & Metrics)
+// REAL-TIME UI UPDATE LOGIC (Dashboard HUD)
 // ============================================================
 
 function updateDetectionUI(summary, detections) {
@@ -285,56 +330,65 @@ function updateDetectionUI(summary, detections) {
             if (bannerWorkers) bannerWorkers.textContent = summary.person_count || 0;
             if (bannerProximity) bannerProximity.textContent = (summary.proximity_alerts || []).length;
             if (bannerZones) bannerZones.textContent = (summary.danger_zones || []).length;
+            if (bannerMachinery) bannerMachinery.textContent = summary.machine_count || 0;
         }
 
-        // Risk badge on camera footer
+        // Camera Footer Badge
         if (riskBadge) {
             const valueEl = riskBadge.querySelector(".risk-value");
             if (valueEl) valueEl.textContent = risk;
-            riskBadge.style.color = RISK_COLORS[risk] || "#6b7280";
+            riskBadge.style.color = RISK_COLORS[risk] || "#64748b";
         }
 
-        // PPE Card Status
+        // PPE Compliance Card
         if (ppeStatus) {
             if (summary.ppe_violations > 0) {
                 ppeStatus.textContent = `${summary.ppe_violations} Violation(s)`;
                 ppeStatus.style.color = "#dc2626";
+                if (ppeSubtext) ppeSubtext.textContent = "Non-compliant gear detected";
             } else {
                 ppeStatus.textContent = "Compliant";
                 ppeStatus.style.color = "#16a34a";
+                if (ppeSubtext) ppeSubtext.textContent = "Hardhats & Vests Verified";
             }
         }
 
-        // Fire Card Status
+        // Fire Hazard Card
         if (fireStatus) {
             if (summary.fire_count > 0) {
                 fireStatus.textContent = `DETECTED (${summary.fire_count})`;
                 fireStatus.style.color = "#dc2626";
+                if (fireSubtext) fireSubtext.textContent = "Active combustion hazard!";
             } else {
                 fireStatus.textContent = "Clear";
                 fireStatus.style.color = "#16a34a";
+                if (fireSubtext) fireSubtext.textContent = "Combustion Debounced";
             }
         }
 
-        // Smoke Card Status
+        // Smoke Hazard Card
         if (smokeStatus) {
             if (summary.smoke_count > 0) {
                 smokeStatus.textContent = `DETECTED (${summary.smoke_count})`;
-                smokeStatus.style.color = "#d97706";
+                smokeStatus.style.color = "#ca8a04";
+                if (smokeSubtext) smokeSubtext.textContent = "Plume hazard detected";
             } else {
                 smokeStatus.textContent = "Clear";
                 smokeStatus.style.color = "#16a34a";
+                if (smokeSubtext) smokeSubtext.textContent = "Thermal / Plume Filter";
             }
         }
 
-        // Worker Card Status
+        // Worker & Machinery Card
         if (personStatus) {
             if (summary.person_count > 0) {
-                personStatus.textContent = `${summary.person_count} Tracked Worker(s)`;
-                personStatus.style.color = "#026aa7";
+                personStatus.textContent = `${summary.person_count} Worker(s)`;
+                personStatus.style.color = "#0284c7";
+                if (personSubtext) personSubtext.textContent = `${summary.machine_count || 0} Heavy Equipment Active`;
             } else {
                 personStatus.textContent = "None";
                 personStatus.style.color = "#64748b";
+                if (personSubtext) personSubtext.textContent = "ByteTrack Persistent IDs";
             }
         }
 
@@ -342,26 +396,37 @@ function updateDetectionUI(summary, detections) {
         if (proximityList) {
             const proxAlerts = summary.proximity_alerts || [];
             if (proxAlerts.length === 0) {
-                proximityList.innerHTML = '<div class="empty-state"><p>No proximity breaches detected</p></div>';
+                proximityList.innerHTML = `
+                    <div class="empty-state">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        <p>No proximity hazards detected</p>
+                        <span>Safe distance maintained between personnel and heavy equipment</span>
+                    </div>`;
             } else {
                 proximityList.innerHTML = proxAlerts.map(p => `
                     <div class="item-badge danger">
-                        <span>⚠️ Person ${p.person_id ?? 'Worker'} ↔ ${escapeHtml(p.machine_type || 'Machine')}</span>
-                        <strong>${Math.round(p.distance_px)}px</strong>
+                        <span>⚠️ Worker ID:${p.person_id ?? 'Unassigned'} ↔ ${escapeHtml(p.machine_type || 'Machinery')}</span>
+                        <strong>${Math.round(p.distance_px)} px ground vector</strong>
                     </div>
                 `).join("");
             }
         }
 
-        // Danger Zones Incursion List
+        // Active Danger Zones
         if (zoneList) {
             const zones = summary.danger_zones || [];
             if (zones.length === 0) {
-                zoneList.innerHTML = '<div class="empty-state"><p>No danger zone incursions</p></div>';
+                zoneList.innerHTML = `
+                    <div class="empty-state">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polygon points="12 2 2 22 22 22 12 2"/></svg>
+                        <p>No active zone incursions</p>
+                        <span>All workers operating outside defined cone boundary clusters</span>
+                    </div>`;
             } else {
                 zoneList.innerHTML = zones.map(z => `
                     <div class="item-badge danger">
-                        <span>🚨 Zone #${z.zone_id || 'Cone Cluster'} (${z.worker_count || 0} worker inside)</span>
+                        <span>🚨 Cone Danger Zone #${z.zone_id || 'Cluster'} (${z.worker_count || 1} worker inside)</span>
+                        <strong>ACTIVE INVASION</strong>
                     </div>
                 `).join("");
             }
@@ -369,38 +434,70 @@ function updateDetectionUI(summary, detections) {
 
         // Trigger toast on high or critical
         if ((risk === "HIGH" || risk === "CRITICAL") && summary.violation_count > 0) {
-            showToast(`${risk} Risk Event Detected`, `${summary.violation_count} active safety violation(s) on site`, risk);
+            showToast(`${risk} Safety Alert Triggered`, `${summary.violation_count} active safety violation(s) on job site`, risk);
         }
     }
 
-    // Bounding Box / Detections List
-    if (Array.isArray(detections) && detectionList) {
-        if (detections.length === 0) {
-            detectionList.innerHTML = `
-                <div class="empty-state">
-                    <p>No objects detected in current frame</p>
-                </div>`;
-        } else {
-            detectionList.innerHTML = detections.map(d => {
-                const trackStr = d.track_id != null ? `[ID:${d.track_id}]` : "";
-                return `
-                    <div class="detection">
-                        <strong>${escapeHtml(d.class)} ${trackStr}</strong> (${(d.confidence * 100).toFixed(1)}%)
-                    </div>
-                `;
-            }).join("");
-        }
+    // Current Frame Detections List
+    if (Array.isArray(detections)) {
+        currentFrameDetections = detections;
+        renderDetectionList();
     }
+}
+
+function renderDetectionList() {
+    if (!detectionList) return;
+
+    let filtered = currentFrameDetections;
+    if (currentDetectionFilter === "worker") {
+        filtered = filtered.filter(d => d.class === "Person");
+    } else if (currentDetectionFilter === "ppe") {
+        filtered = filtered.filter(d => ["Hardhat", "Safety Vest", "Mask", "NO-Hardhat", "NO-Safety Vest", "NO-Mask"].includes(d.class));
+    } else if (currentDetectionFilter === "machinery") {
+        filtered = filtered.filter(d => ["machinery", "vehicle", "utility pole"].includes(d.class));
+    } else if (currentDetectionFilter === "hazard") {
+        filtered = filtered.filter(d => ["Fire", "Smoke", "NO-Hardhat", "NO-Safety Vest", "NO-Mask"].includes(d.class));
+    }
+
+    if (filtered.length === 0) {
+        detectionList.innerHTML = `
+            <div class="empty-state">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <p>No ${currentDetectionFilter !== "all" ? currentDetectionFilter : ""} detections in current buffer</p>
+            </div>`;
+        return;
+    }
+
+    detectionList.innerHTML = filtered.map(d => {
+        const trackStr = d.track_id != null ? `[ID:${d.track_id}]` : "";
+        const confPct = (d.confidence * 100).toFixed(1);
+        return `
+            <div class="detection">
+                <strong>${escapeHtml(d.class)} ${trackStr}</strong> (${confPct}%)
+            </div>
+        `;
+    }).join("");
+}
+
+if (detectionFilterGroup) {
+    detectionFilterGroup.addEventListener("click", (e) => {
+        const btn = e.target.closest(".filter-pill");
+        if (!btn) return;
+        detectionFilterGroup.querySelectorAll(".filter-pill").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentDetectionFilter = btn.dataset.filter || "all";
+        renderDetectionList();
+    });
 }
 
 
 // ============================================================
-// CAMERA & WEBSOCKET MANAGEMENT
+// CAMERA STREAM & WEBSOCKET MANAGEMENT
 // ============================================================
 
 async function startCamera() {
     try {
-        cameraMessage.textContent = "Requesting site camera permission...";
+        cameraMessage.textContent = "Requesting site camera permissions...";
 
         cameraStream = await navigator.mediaDevices.getUserMedia({
             video: { width: 640, height: 480 },
@@ -411,16 +508,22 @@ async function startCamera() {
         await video.play();
 
         if (cameraPlaceholder) cameraPlaceholder.style.display = "none";
+        if (liveRecordingDot) liveRecordingDot.classList.remove("hidden");
+        if (resolutionBadge) {
+            resolutionBadge.textContent = `${video.videoWidth || 640}×${video.videoHeight || 480}`;
+            resolutionBadge.classList.remove("hidden");
+        }
 
         connectWebSocket();
 
         startButton.disabled = true;
         stopButton.disabled = false;
+        snapshotBtn.disabled = false;
 
     } catch (error) {
         console.error("Camera error:", error);
-        cameraMessage.textContent = "Could not access the site camera.";
-        showToast("Camera Error", "Camera access denied or unavailable", "HIGH");
+        cameraMessage.textContent = "Could not access site camera.";
+        showToast("Camera Error", "Camera access denied or device unavailable", "HIGH");
     }
 }
 
@@ -442,7 +545,7 @@ function connectWebSocket() {
 
     socket.onopen = () => {
         setConnectionState("connected");
-        cameraMessage.textContent = "Live camera running. Real-time AI safety pipeline active.";
+        cameraMessage.textContent = "Live camera stream connected. Safety AI multi-model pipeline running.";
         sendingFrames = true;
         sendFrame();
     };
@@ -476,7 +579,7 @@ function connectWebSocket() {
 
     socket.onerror = (error) => {
         console.error("WebSocket error:", error);
-        cameraMessage.textContent = "Connection error. Ensure backend server is running.";
+        cameraMessage.textContent = "Connection error. Verify backend server status.";
         setConnectionState("disconnected");
         awaitingResponse = false;
     };
@@ -538,12 +641,15 @@ function stopCamera() {
     video.srcObject = null;
 
     if (cameraPlaceholder) cameraPlaceholder.style.display = "";
+    if (liveRecordingDot) liveRecordingDot.classList.add("hidden");
+    if (resolutionBadge) resolutionBadge.classList.add("hidden");
 
     startButton.disabled = false;
     stopButton.disabled = true;
+    snapshotBtn.disabled = true;
 
     if (fpsCounter) fpsCounter.classList.add("hidden");
-    cameraMessage.textContent = "Camera feed stopped.";
+    cameraMessage.textContent = "Camera stream stopped.";
 
     ppeStatus.textContent = "Compliant";
     ppeStatus.style.color = "";
@@ -563,17 +669,43 @@ function stopCamera() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
+// SNAPSHOT & FULLSCREEN UTILITIES
+function captureSnapshot() {
+    if (!canvas || canvas.width === 0) return;
+    const dataUrl = canvas.toDataURL("image/jpeg");
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = `site_snapshot_${Date.now()}.jpg`;
+    link.click();
+    showToast("Snapshot Saved", "Live camera frame captured to downloads", "HIGH");
+}
+
+function toggleFullscreen() {
+    if (!cameraViewport) return;
+    if (!document.fullscreenElement) {
+        cameraViewport.requestFullscreen().catch(err => console.error("Fullscreen failed:", err));
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+if (snapshotBtn) snapshotBtn.addEventListener("click", captureSnapshot);
+if (fullscreenBtn) fullscreenBtn.addEventListener("click", toggleFullscreen);
+
 
 // ============================================================
-// MEDIA ANALYSIS (Image & Video Upload Processing)
+// MEDIA ANALYSIS (Image & Video File Uploads)
 // ============================================================
 
-// Tab switching between Image and Video analysis
 const mediaTabBtns = document.querySelectorAll(".media-tab-btn");
 mediaTabBtns.forEach(btn => {
     btn.addEventListener("click", () => {
-        mediaTabBtns.forEach(b => b.classList.remove("active"));
+        mediaTabBtns.forEach(b => {
+            b.classList.remove("active");
+            b.setAttribute("aria-selected", "false");
+        });
         btn.classList.add("active");
+        btn.setAttribute("aria-selected", "true");
         const type = btn.dataset.mediatab;
         document.getElementById("media-view-image").classList.toggle("hidden", type !== "image");
         document.getElementById("media-view-video").classList.toggle("hidden", type !== "video");
@@ -591,6 +723,12 @@ const imageSummaryCard = document.getElementById("imageSummaryCard");
 
 if (imageDropzone && imageFileInput) {
     imageDropzone.addEventListener("click", () => imageFileInput.click());
+    imageDropzone.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            imageFileInput.click();
+        }
+    });
     imageDropzone.addEventListener("dragover", (e) => {
         e.preventDefault();
         imageDropzone.classList.add("dragover");
@@ -620,7 +758,6 @@ async function handleImageUpload(file) {
     imageProcessingState.classList.remove("hidden");
     imageResultContainer.classList.add("hidden");
 
-    // Preview Original
     imageOriginalPreview.src = URL.createObjectURL(file);
 
     const formData = new FormData();
@@ -640,25 +777,22 @@ async function handleImageUpload(file) {
         }
 
         const summary = data.result.summary || {};
-        const detections = data.result.detections || [];
 
-        // Set Annotated Image URL
         imageAnnotatedPreview.src = outputUrl(data.annotated_image_path);
 
-        // Render Summary Details
         imageSummaryCard.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h4 style="font-size: 16px; font-weight: 700; color: var(--slate-900);">Safety Analysis Summary</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h4 style="font-size: 16px; font-weight: 800; color: var(--slate-900);">Safety AI Image Inspection Result</h4>
                 ${riskPill(summary.risk_level)}
             </div>
             <div class="kv-grid" style="margin-bottom: 16px;">
                 <div class="kv"><div class="k">Active Violations</div><div class="v">${summary.violation_count || 0}</div></div>
                 <div class="kv"><div class="k">PPE Violations</div><div class="v">${summary.ppe_violations || 0}</div></div>
                 <div class="kv"><div class="k">Tracked Workers</div><div class="v">${summary.person_count || 0}</div></div>
-                <div class="kv"><div class="k">Machinery Detected</div><div class="v">${summary.machine_count || 0}</div></div>
+                <div class="kv"><div class="k">Heavy Machinery</div><div class="v">${summary.machine_count || 0}</div></div>
             </div>
             <div>
-                <strong>Violation Types:</strong> ${escapeHtml(violationSummary(summary.violation_counts))}
+                <strong>Violation Breakdown:</strong> ${escapeHtml(violationSummary(summary.violation_counts))}
             </div>
         `;
 
@@ -666,7 +800,7 @@ async function handleImageUpload(file) {
         imageResultContainer.classList.remove("hidden");
         imageDropzone.classList.remove("hidden");
 
-        showToast("Image Processed", `Detection completed. Risk Level: ${summary.risk_level || 'SAFE'}`, summary.risk_level === "CRITICAL" ? "CRITICAL" : "HIGH");
+        showToast("Image Analyzed", `Detection completed. Risk Level: ${summary.risk_level || 'SAFE'}`, summary.risk_level === "CRITICAL" ? "CRITICAL" : "HIGH");
 
     } catch (err) {
         console.error("Image upload error:", err);
@@ -687,6 +821,12 @@ const videoSummaryCard = document.getElementById("videoSummaryCard");
 
 if (videoDropzone && videoFileInput) {
     videoDropzone.addEventListener("click", () => videoFileInput.click());
+    videoDropzone.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            videoFileInput.click();
+        }
+    });
     videoDropzone.addEventListener("dragover", (e) => {
         e.preventDefault();
         videoDropzone.classList.add("dragover");
@@ -734,21 +874,17 @@ async function handleVideoUpload(file) {
         const framesProcessed = res.headers.get("X-Frames-Processed") || "—";
         const maxRisk = res.headers.get("X-Max-Risk-Level") || "SAFE";
 
-        videoResultPlayer.onerror = (e) => {
-            console.error("Video player error:", videoResultPlayer.error);
-        };
         videoResultPlayer.src = videoUrl;
         videoResultPlayer.load();
         videoDownloadBtn.href = videoUrl;
-        videoDownloadBtn.download = "safety_analysis.mp4";
 
         videoSummaryCard.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h4 style="font-size: 16px; font-weight: 700; color: var(--slate-900);">Video Analysis Result</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h4 style="font-size: 16px; font-weight: 800; color: var(--slate-900);">Offline Video Pass Completed</h4>
                 ${riskPill(maxRisk)}
             </div>
             <div class="kv-grid">
-                <div class="kv"><div class="k">Frames Processed</div><div class="v">${framesProcessed}</div></div>
+                <div class="kv"><div class="k">Frames Analyzed</div><div class="v">${framesProcessed}</div></div>
                 <div class="kv"><div class="k">Peak Risk Index</div><div class="v">${escapeHtml(maxRisk)}</div></div>
             </div>
         `;
@@ -757,7 +893,7 @@ async function handleVideoUpload(file) {
         videoResultContainer.classList.remove("hidden");
         videoDropzone.classList.remove("hidden");
 
-        showToast("Video Processing Complete", `Successfully analyzed ${framesProcessed} video frames`, "HIGH");
+        showToast("Video Processing Complete", `Analyzed ${framesProcessed} video frames`, "HIGH");
 
     } catch (err) {
         console.error("Video processing error:", err);
@@ -830,14 +966,14 @@ if (audioToggleBtn) {
         audioEnabled = !audioEnabled;
         audioIconOn.classList.toggle("hidden", !audioEnabled);
         audioIconOff.classList.toggle("hidden", audioEnabled);
-        audioStatusText.textContent = audioEnabled ? "Audio On" : "Audio Off";
-        if (audioEnabled) playAlertSound(600, "sine", 0.1);
+        audioStatusText.textContent = audioEnabled ? "Audio Alerts On" : "Audio Alerts Off";
+        if (audioEnabled) playAlertSound(600, "sine", 0.15);
     });
 }
 
 
 // ============================================================
-// ALERT BADGE & FEED
+// ALERT FEED & BADGES
 // ============================================================
 
 async function loadAlertBadge() {
@@ -846,15 +982,13 @@ async function loadAlertBadge() {
         const n = data.unacknowledged || 0;
         const display = n > 99 ? "99+" : String(n);
 
-        if (alertBadgeCount) alertBadgeCount.textContent = display;
-        if (navAlertBadge) navAlertBadge.textContent = display;
-
-        if (n > 0) {
-            if (alertBadge) alertBadge.classList.remove("hidden");
-            if (navAlertBadge) navAlertBadge.classList.remove("hidden");
-        } else {
-            if (alertBadge) alertBadge.classList.add("hidden");
-            if (navAlertBadge) navAlertBadge.classList.add("hidden");
+        if (alertBadgeCount) {
+            alertBadgeCount.textContent = display;
+            alertBadgeCount.classList.toggle("hidden", n === 0);
+        }
+        if (navAlertBadge) {
+            navAlertBadge.textContent = display;
+            navAlertBadge.classList.toggle("hidden", n === 0);
         }
     } catch (err) {
         console.debug("Alert badge check failed:", err);
@@ -864,16 +998,21 @@ async function loadAlertBadge() {
 async function loadAlerts() {
     const list = document.getElementById("alertsList");
     const status = document.getElementById("alertStatusFilter").value;
-    const qs = status ? `?status=${encodeURIComponent(status)}&limit=100` : "?limit=100";
+    const level = document.getElementById("alertLevelFilter").value;
+
+    const params = new URLSearchParams({ limit: "100" });
+    if (status) params.set("status", status);
+    if (level) params.set("level", level);
 
     try {
-        const data = await getJson(`/api/alerts${qs}`);
+        const data = await getJson(`/api/alerts?${params.toString()}`);
         const alerts = data.alerts || [];
 
         if (alerts.length === 0) {
             list.innerHTML = `
                 <div class="empty-state">
-                    <p>No active alerts matching filter criteria</p>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <p>No safety alerts matching current criteria</p>
                 </div>`;
             return;
         }
@@ -881,14 +1020,14 @@ async function loadAlerts() {
         list.innerHTML = alerts.map(a => {
             const acked = a.status === "acknowledged";
             const ackControl = acked
-                ? '<span class="alert-ack">✓ Acknowledged</span>'
-                : `<button class="btn btn-primary" data-ack="${a.id}">Acknowledge</button>`;
+                ? '<span style="color: var(--green-700); font-size: 12px; font-weight: 700;">✓ Acknowledged</span>'
+                : `<button class="btn btn-primary btn-sm" data-ack="${a.id}">Acknowledge</button>`;
             return `
                 <div class="alert-item level-${escapeHtml(a.level)}">
                     <div class="alert-main">
                         <div class="alert-title">${escapeHtml(a.title)}</div>
                         <div class="alert-meta">
-                            ${riskPill(a.level)} · ${fmtTime(a.ts)} · ${escapeHtml(a.channel)}${a.notified ? " · Notified" : ""}
+                            ${riskPill(a.level)} · ${fmtTime(a.ts)} · Source: ${escapeHtml(a.channel)}${a.notified ? " · Telegram Notified" : ""}
                         </div>
                         <div class="alert-message">${escapeHtml(a.message)}</div>
                     </div>
@@ -902,7 +1041,7 @@ async function loadAlerts() {
         });
 
     } catch (err) {
-        list.innerHTML = `<div class="empty">Could not load alerts (${escapeHtml(err.message)}).</div>`;
+        list.innerHTML = `<div class="empty-state"><p>Could not load alerts (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
@@ -915,15 +1054,33 @@ async function ackAlert(id) {
     }
 }
 
+async function ackAllAlerts() {
+    try {
+        const data = await getJson("/api/alerts?limit=100&status=new");
+        const newAlerts = data.alerts || [];
+        for (const a of newAlerts) {
+            await fetch(apiUrl(`/api/alerts/${a.id}/ack`), { method: "POST" });
+        }
+        showToast("Alerts Acknowledged", `Acknowledged ${newAlerts.length} active alerts`, "HIGH");
+        await Promise.all([loadAlerts(), loadAlertBadge()]);
+    } catch (err) {
+        console.error("Ack all failed:", err);
+    }
+}
+
+const ackAllAlertsBtn = document.getElementById("ackAllAlertsBtn");
+if (ackAllAlertsBtn) ackAllAlertsBtn.addEventListener("click", ackAllAlerts);
+
 
 // ============================================================
-// HISTORY TAB
+// EVENT HISTORY LOG
 // ============================================================
 
 async function loadHistory() {
     const body = document.getElementById("historyBody");
     const risk = document.getElementById("historyRiskFilter").value;
     const source = document.getElementById("historySourceFilter").value;
+    const search = (document.getElementById("historySearchInput")?.value || "").toLowerCase().trim();
 
     const params = new URLSearchParams({ limit: "200" });
     if (risk) params.set("risk", risk);
@@ -931,10 +1088,17 @@ async function loadHistory() {
 
     try {
         const data = await getJson(`/api/events?${params.toString()}`);
-        const events = data.events || [];
+        let events = data.events || [];
+
+        if (search) {
+            events = events.filter(e =>
+                String(e.id).includes(search) ||
+                JSON.stringify(e.violation_counts || {}).toLowerCase().includes(search)
+            );
+        }
 
         if (events.length === 0) {
-            body.innerHTML = '<tr><td colspan="8"><div class="empty">No recorded safety events matching filters.</div></td></tr>';
+            body.innerHTML = '<tr><td colspan="8"><div class="empty-state"><p>No recorded safety events matching filters.</p></div></td></tr>';
             return;
         }
 
@@ -944,13 +1108,13 @@ async function loadHistory() {
             const evidence = [img, clip].filter(Boolean).join(" · ") || "—";
             return `
                 <tr>
+                    <td><strong>#${e.id}</strong></td>
                     <td>${fmtTime(e.ts)}</td>
                     <td><strong>${escapeHtml(e.source)}</strong></td>
                     <td>${riskPill(e.risk_level)}</td>
                     <td>${escapeHtml(violationSummary(e.violation_counts))}</td>
                     <td>${e.persons ?? 0}</td>
-                    <td>${e.fire ?? 0}</td>
-                    <td>${e.smoke ?? 0}</td>
+                    <td>${(e.fire || e.smoke) ? "DETECTED" : "Clear"}</td>
                     <td>${evidence}</td>
                 </tr>
             `;
@@ -968,18 +1132,23 @@ async function loadHistory() {
                 } else if (img) {
                     mediaHtml = `<img class="modal-media" src="${img}" alt="Event #${id}">`;
                 }
-                openLightbox(`Event #${id} Evidence Detail`, `Captured snapshot/recording`, mediaHtml);
+                openLightbox(`Event #${id} Evidence Inspector`, `Recorded snapshot/video clip`, mediaHtml);
             });
         });
 
     } catch (err) {
-        body.innerHTML = `<tr><td colspan="8"><div class="empty">Could not load event history (${escapeHtml(err.message)}).</div></td></tr>`;
+        body.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>Could not load event history (${escapeHtml(err.message)})</p></div></td></tr>`;
     }
+}
+
+const historySearchInput = document.getElementById("historySearchInput");
+if (historySearchInput) {
+    historySearchInput.addEventListener("input", loadHistory);
 }
 
 
 // ============================================================
-// STATISTICS TAB
+// ANALYTICS & CHARTS
 // ============================================================
 
 function barChart(container, entries, colorFn) {
@@ -987,7 +1156,7 @@ function barChart(container, entries, colorFn) {
     const items = entries.filter(([, v]) => v > 0);
 
     if (items.length === 0) {
-        el.innerHTML = '<div class="empty">No data available for this range.</div>';
+        el.innerHTML = '<div class="empty-state"><p>No data available for selected time window.</p></div>';
         return;
     }
 
@@ -995,7 +1164,7 @@ function barChart(container, entries, colorFn) {
 
     el.innerHTML = `<div class="bar-chart">${items.map(([label, value]) => {
         const pct = max > 0 ? (value / max) * 100 : 0;
-        const color = colorFn ? colorFn(label) : "#026aa7";
+        const color = colorFn ? colorFn(label) : "#0284c7";
         return `
             <div class="bar-row">
                 <div class="bar-label" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
@@ -1018,7 +1187,7 @@ async function loadStatistics() {
             ["Recorded Events", t.events ?? 0],
             ["Generated Alerts", t.alerts ?? 0],
             ["Unacknowledged Alerts", t.alerts_unacknowledged ?? 0],
-            ["Frames Processed", t.frames_processed ?? 0],
+            ["Frames Monitored", t.frames_processed ?? 0],
             ["Captured Snapshots", t.events_with_image ?? 0],
             ["Video Recordings", t.events_with_clip ?? 0],
         ].map(([label, value]) => `
@@ -1032,13 +1201,13 @@ async function loadStatistics() {
 
         const riskOrder = ["SAFE", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
         barChart("riskChart", riskOrder.map(k => [k, (r.by_risk || {})[k] || 0]),
-            label => RISK_COLORS[label] || "#026aa7");
+            label => RISK_COLORS[label] || "#0284c7");
 
         barChart("violationChart", Object.entries(r.by_violation_type || {}).slice(0, 10));
         barChart("dayChart", Object.entries(r.by_day || {}));
 
     } catch (err) {
-        cards.innerHTML = `<div class="empty">Could not load statistics (${escapeHtml(err.message)}).</div>`;
+        cards.innerHTML = `<div class="empty-state"><p>Could not load analytics (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
@@ -1052,13 +1221,20 @@ async function loadEvidence() {
 
     try {
         const data = await getJson("/api/evidence?limit=60");
-        const items = data.evidence || [];
+        let items = data.evidence || [];
+
+        if (currentEvidenceFilter === "clips") {
+            items = items.filter(it => it.clip);
+        } else if (currentEvidenceFilter === "snapshots") {
+            items = items.filter(it => it.image && !it.clip);
+        }
 
         if (items.length === 0) {
             gallery.innerHTML = `
                 <div class="empty-state" style="grid-column: 1/-1">
-                    <p>No evidence captured yet</p>
-                    <span>High and critical risk safety violations automatically capture annotated evidence</span>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    <p>No evidence artifacts captured yet</p>
+                    <span>High and critical risk safety violations automatically capture annotated snapshots & clips</span>
                 </div>`;
             return;
         }
@@ -1068,7 +1244,7 @@ async function loadEvidence() {
             if (it.clip) {
                 media = `<video class="evidence-media" src="${evidenceUrl(it.clip)}" muted></video>`;
             } else if (it.image) {
-                media = `<img class="evidence-media" src="${evidenceUrl(it.image)}" alt="event #${it.event_id}" loading="lazy">`;
+                media = `<img class="evidence-media" src="${evidenceUrl(it.image)}" alt="Event #${it.event_id}" loading="lazy">`;
             } else {
                 media = "";
             }
@@ -1103,13 +1279,25 @@ async function loadEvidence() {
         });
 
     } catch (err) {
-        gallery.innerHTML = `<div class="empty">Could not load evidence gallery (${escapeHtml(err.message)}).</div>`;
+        gallery.innerHTML = `<div class="empty-state"><p>Could not load evidence gallery (${escapeHtml(err.message)})</p></div>`;
     }
+}
+
+const evidenceFilterGroup = document.getElementById("evidenceFilterGroup");
+if (evidenceFilterGroup) {
+    evidenceFilterGroup.addEventListener("click", (e) => {
+        const btn = e.target.closest(".filter-pill");
+        if (!btn) return;
+        evidenceFilterGroup.querySelectorAll(".filter-pill").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentEvidenceFilter = btn.dataset.evidenceFilter || "all";
+        loadEvidence();
+    });
 }
 
 
 // ============================================================
-// REPORTS GENERATOR
+// SAFETY AUDIT REPORTS GENERATOR
 // ============================================================
 
 function kv(label, value) {
@@ -1131,6 +1319,7 @@ async function loadReport() {
 
         const topRows = (r.top_events || []).map(e => `
             <tr>
+                <td><strong>#${e.id}</strong></td>
                 <td>${fmtTime(e.ts)}</td>
                 <td>${escapeHtml(e.source)}</td>
                 <td>${riskPill(e.risk_level)}</td>
@@ -1141,7 +1330,7 @@ async function loadReport() {
 
         summary.innerHTML = `
             <div style="margin-bottom: 24px;">
-                <h3 style="font-size: 16px; font-weight: 700; color: var(--slate-800); margin-bottom: 12px;">Site Compliance Totals (${escapeHtml(r.range)})</h3>
+                <h3 style="font-size: 16px; font-weight: 800; color: var(--slate-900); margin-bottom: 12px;">Site Compliance Overview (${escapeHtml(r.range)})</h3>
                 <div class="kv-grid">
                     ${kv("Total Incidents", t.events ?? 0)}
                     ${kv("Alerts Generated", t.alerts ?? 0)}
@@ -1154,33 +1343,33 @@ async function loadReport() {
             </div>
 
             <div style="margin-bottom: 24px;">
-                <h3 style="font-size: 16px; font-weight: 700; color: var(--slate-800); margin-bottom: 12px;">Events by Input Source</h3>
+                <h3 style="font-size: 16px; font-weight: 800; color: var(--slate-900); margin-bottom: 12px;">Events by Input Source</h3>
                 <div class="kv-grid">
-                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<div class="empty">No source data available.</div>'}
+                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<div class="empty-state"><p>No source data recorded.</p></div>'}
                 </div>
             </div>
 
             <div>
-                <h3 style="font-size: 16px; font-weight: 700; color: var(--slate-800); margin-bottom: 12px;">Most Severe Site Incidents</h3>
+                <h3 style="font-size: 16px; font-weight: 800; color: var(--slate-900); margin-bottom: 12px;">Most Severe Site Incidents</h3>
                 <div class="table-container" style="border: 1px solid var(--slate-200); border-radius: var(--radius-md);">
                     <table class="data-table">
                         <thead>
-                            <tr><th>Time</th><th>Source</th><th>Risk Level</th><th>Violations</th><th>Detail</th></tr>
+                            <tr><th>Event ID</th><th>Timestamp</th><th>Source</th><th>Risk Level</th><th>Violations</th><th>Detail</th></tr>
                         </thead>
-                        <tbody>${topRows || '<tr><td colspan="5"><div class="empty">No severe incidents recorded.</div></td></tr>'}</tbody>
+                        <tbody>${topRows || '<tr><td colspan="6"><div class="empty-state"><p>No severe incidents recorded in window.</p></div></td></tr>'}</tbody>
                     </table>
                 </div>
             </div>
         `;
 
     } catch (err) {
-        summary.innerHTML = `<div class="empty">Could not generate report (${escapeHtml(err.message)}).</div>`;
+        summary.innerHTML = `<div class="empty-state"><p>Could not generate audit report (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
 
 // ============================================================
-// POLLING & INITIALIZATION
+// POLLING & EVENT LISTENERS
 // ============================================================
 
 function startPolling() {
@@ -1194,7 +1383,7 @@ function startPolling() {
 }
 
 
-// EVENT LISTENERS
+// EVENT BINDINGS
 startButton.addEventListener("click", startCamera);
 stopButton.addEventListener("click", stopCamera);
 
@@ -1209,6 +1398,7 @@ document.querySelector(".sidebar-nav").addEventListener("click", (e) => {
 
 document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);
 document.getElementById("alertStatusFilter").addEventListener("change", loadAlerts);
+document.getElementById("alertLevelFilter").addEventListener("change", loadAlerts);
 
 document.getElementById("refreshHistory").addEventListener("click", loadHistory);
 document.getElementById("historyRiskFilter").addEventListener("change", loadHistory);
@@ -1223,6 +1413,6 @@ document.getElementById("generateReport").addEventListener("click", loadReport);
 document.getElementById("reportRange").addEventListener("change", loadReport);
 
 
-// INIT
+// INITIALIZE
 loadAlertBadge();
 startPolling();
