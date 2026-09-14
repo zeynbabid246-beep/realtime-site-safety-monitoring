@@ -22,7 +22,6 @@ runs/
 person_tracking_test/output/
 
 # Models / weights
-*.pt
 *.onnx
 *.engine
 
