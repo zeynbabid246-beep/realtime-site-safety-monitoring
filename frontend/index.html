@@ -28,8 +28,18 @@
                     </svg>
                 </button>
             </div>
-            <div class="modal-body" id="modalBody">
-                <!-- Dynamically populated -->
+            <div class="modal-body">
+                <div id="modalBody"></div>
+                <div class="modal-actions" id="modalActions">
+                    <a id="modalDownloadBtn" class="btn btn-primary hidden" download href="#" target="_blank" rel="noopener">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Download Evidence File
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -237,7 +247,7 @@
                     </div>
                 </div>
 
-                <!-- Detection Overview Cards -->
+                <!-- Detection Overview Cards (6 Cards Grid) -->
                 <div class="stats-grid">
                     <div class="stat-card" id="ppeCard">
                         <div class="stat-icon ppe-icon">
@@ -289,6 +299,35 @@
                         <div class="stat-info">
                             <span class="stat-label">Tracked Workers</span>
                             <span class="stat-value" id="personStatus">None</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" id="machineryCard">
+                        <div class="stat-icon machinery-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                <circle cx="6" cy="18" r="2"/>
+                                <circle cx="18" cy="18" r="2"/>
+                                <path d="M10 6V3h4v3"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Machinery & Equipment</span>
+                            <span class="stat-value" id="machineStatus">None</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" id="zoneCard">
+                        <div class="stat-icon zone-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <polygon points="12 2 2 22 22 22 12 2"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Danger Zones & Cones</span>
+                            <span class="stat-value" id="zoneStatus">Clear</span>
                         </div>
                     </div>
                 </div>
@@ -433,7 +472,7 @@
                                     <h4>Processed Video Output</h4>
                                     <video id="videoResultPlayer" controls playsinline></video>
                                 </div>
-                                <div class="video-actions-bar">
+                                <div class="video-actions-bar" style="margin-top: 16px;">
                                     <a id="videoDownloadBtn" class="btn btn-primary" download="safety_analysis.mp4" href="#">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -443,7 +482,7 @@
                                         Download Annotated Video
                                     </a>
                                 </div>
-                                <div class="result-summary-card" id="videoSummaryCard">
+                                <div class="result-summary-card" id="videoSummaryCard" style="margin-top: 16px;">
                                     <!-- Populated by app.js -->
                                 </div>
                             </div>
@@ -467,6 +506,12 @@
                                 <option value="new">New / Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+                            <button id="ackAllAlertsBtn" class="btn btn-success" aria-label="Acknowledge all new alerts">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                Acknowledge All
+                            </button>
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -494,6 +539,8 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                            <input type="text" id="historySearchInput" placeholder="Search events..." class="search-input" aria-label="Search event history">
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
                                 <option value="">All risk levels</option>
@@ -613,6 +660,12 @@
                             <p>Automated JPEG snapshots and rolling MP4 clips captured during HIGH/CRITICAL events</p>
                         </div>
                         <div class="card-actions">
+                            <label for="evidenceRiskFilter" class="sr-only">Filter evidence by risk</label>
+                            <select id="evidenceRiskFilter" class="select-input">
+                                <option value="">All risk levels</option>
+                                <option value="HIGH">HIGH</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                            </select>
                             <button id="refreshEvidence" class="btn btn-secondary" aria-label="Refresh evidence gallery">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -670,6 +723,14 @@
                                 </svg>
                                 Export CSV
                             </a>
+                            <button id="printReportBtn" class="btn btn-outline" onclick="window.print()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <polyline points="6 9 6 2 18 2 18 9"/>
+                                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                                    <rect x="6" y="14" width="12" height="8"/>
+                                </svg>
+                                Print Report
+                            </button>
                         </div>
                     </div>
                     <div id="reportSummary" class="report-summary">
