@@ -919,7 +919,64 @@ body {
 .ppe-icon { background: var(--blue-50); color: var(--blue-600); }
 .fire-icon { background: var(--red-50); color: var(--red-600); }
 .smoke-icon { background: var(--amber-50); color: var(--amber-600); }
-.people-icon { background: var(--slate-100); color: var(--blue-700); }
+.people-icon { background: var(--blue-100); color: var(--blue-800); }
+.machine-icon { background: var(--slate-100); color: var(--slate-700); }
+.zone-icon { background: var(--orange-50); color: var(--orange-600); }
+
+.stats-grid-6 {
+    grid-template-columns: repeat(6, 1fr);
+}
+
+.search-box {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.text-input {
+    padding: 9px 14px;
+    border: 1px solid var(--slate-300);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    color: var(--slate-800);
+    background: white;
+    width: 200px;
+    transition: all var(--transition);
+}
+
+.text-input:focus {
+    border-color: var(--blue-600);
+    box-shadow: 0 0 0 3px rgba(2, 106, 167, 0.15);
+    outline: none;
+}
+
+.filter-group {
+    display: inline-flex;
+    gap: 4px;
+    background: var(--slate-100);
+    padding: 3px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--slate-200);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+}
+
+.filter-group .btn-secondary.active {
+    background: white;
+    color: var(--blue-700);
+    font-weight: 700;
+    box-shadow: var(--shadow-sm);
+}
+
+.modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 
 .stat-info {
     display: flex;
@@ -1365,10 +1422,35 @@ body {
    RESPONSIVE DESIGN
 ========================================================= */
 
+@media (max-width: 1280px) {
+    .stats-grid-6 { grid-template-columns: repeat(3, 1fr); }
+}
+
 @media (max-width: 1024px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .stats-grid-6 { grid-template-columns: repeat(2, 1fr); }
     .split-grid { grid-template-columns: 1fr; }
     .result-media-grid { grid-template-columns: 1fr; }
+}
+
+@media print {
+    .sidebar, .top-header, .card-actions, .mobile-menu-btn, .btn, .btn-audio-toggle {
+        display: none !important;
+    }
+    .main-wrapper {
+        margin-left: 0 !important;
+    }
+    .content {
+        padding: 0 !important;
+    }
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    body {
+        background: white !important;
+        color: black !important;
+    }
 }
 
 @media (max-width: 768px) {
