@@ -21,12 +21,22 @@
                     <h3 id="modalTitle">Evidence Inspector</h3>
                     <p id="modalSubtitle">Safety violation snapshot / recording detail</p>
                 </div>
-                <button type="button" class="btn-icon" id="closeModalBtn" aria-label="Close modal">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/>
-                        <line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
+                <div class="modal-header-actions">
+                    <a id="modalDownloadBtn" class="btn btn-outline btn-sm hidden" href="#" download target="_blank" aria-label="Download evidence file">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Download
+                    </a>
+                    <button type="button" class="btn-icon" id="closeModalBtn" aria-label="Close modal">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="modal-body" id="modalBody">
                 <!-- Dynamically populated -->
@@ -201,6 +211,10 @@
                         </div>
                         <div class="card-actions">
                             <span class="fps-badge hidden" id="fpsCounter">0 FPS</span>
+                            <label for="cameraSelect" class="sr-only">Select Camera Device</label>
+                            <select id="cameraSelect" class="select-input" aria-label="Select camera source">
+                                <option value="">Default Camera</option>
+                            </select>
                             <button id="startButton" class="btn btn-primary" aria-label="Start live webcam detection">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                     <polygon points="5 3 19 12 5 21 5 3"/>
@@ -212,6 +226,13 @@
                                     <rect x="6" y="6" width="12" height="12" rx="1"/>
                                 </svg>
                                 Stop Camera
+                            </button>
+                            <button id="snapshotBtn" class="btn btn-secondary" aria-label="Take Live Snapshot" title="Capture and download annotated camera frame">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                    <circle cx="12" cy="13" r="4"/>
+                                </svg>
+                                Snapshot
                             </button>
                         </div>
                     </div>
@@ -237,8 +258,8 @@
                     </div>
                 </div>
 
-                <!-- Detection Overview Cards -->
-                <div class="stats-grid">
+                <!-- Detection Overview Cards (6 Stat Grid) -->
+                <div class="stats-grid stats-grid-6">
                     <div class="stat-card" id="ppeCard">
                         <div class="stat-icon ppe-icon">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -289,6 +310,34 @@
                         <div class="stat-info">
                             <span class="stat-label">Tracked Workers</span>
                             <span class="stat-value" id="personStatus">None</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" id="machineCard">
+                        <div class="stat-icon machine-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                <circle cx="6" cy="18" r="2"/>
+                                <circle cx="18" cy="18" r="2"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Machinery Detected</span>
+                            <span class="stat-value" id="machineStatus">None</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" id="zoneCard">
+                        <div class="stat-icon zone-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <polygon points="12 2 2 22 22 22 12 2"/>
+                                <line x1="12" y1="9" x2="12" y2="13"/>
+                                <line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Danger Zone Incursion</span>
+                            <span class="stat-value" id="zoneStatus">Clear</span>
                         </div>
                     </div>
                 </div>
@@ -395,6 +444,16 @@
                                 <div class="result-summary-card" id="imageSummaryCard">
                                     <!-- Populated by app.js -->
                                 </div>
+                                <div class="media-actions-bar" style="margin-top: 16px;">
+                                    <a id="downloadImageBtn" class="btn btn-primary hidden" download="annotated_site_image.jpg" href="#">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                            <polyline points="7 10 12 15 17 10"/>
+                                            <line x1="12" y1="15" x2="12" y2="3"/>
+                                        </svg>
+                                        Download Annotated Image
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -461,6 +520,17 @@
                             <p>HIGH and CRITICAL safety violations requiring immediate safety officer acknowledgment</p>
                         </div>
                         <div class="card-actions">
+                            <div class="search-box">
+                                <input type="text" id="alertSearchInput" class="text-input" placeholder="Search alerts..." aria-label="Search alerts">
+                            </div>
+                            <label for="alertLevelFilter" class="sr-only">Filter alert level</label>
+                            <select id="alertLevelFilter" class="select-input">
+                                <option value="">All Risk Levels</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                                <option value="HIGH">HIGH</option>
+                                <option value="MEDIUM">MEDIUM</option>
+                                <option value="LOW">LOW</option>
+                            </select>
                             <label for="alertStatusFilter" class="sr-only">Filter alert status</label>
                             <select id="alertStatusFilter" class="select-input">
                                 <option value="">All statuses</option>
@@ -494,6 +564,10 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                            <div class="search-box">
+                                <input type="text" id="historySearchInput" class="text-input" placeholder="Search violations..." aria-label="Search violation history">
+                            </div>
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
                                 <option value="">All risk levels</option>
@@ -613,6 +687,11 @@
                             <p>Automated JPEG snapshots and rolling MP4 clips captured during HIGH/CRITICAL events</p>
                         </div>
                         <div class="card-actions">
+                            <div class="filter-group" role="group" aria-label="Filter evidence type">
+                                <button type="button" class="btn btn-sm btn-secondary active" data-evidence-type="all">All</button>
+                                <button type="button" class="btn btn-sm btn-secondary" data-evidence-type="snapshot">Snapshots</button>
+                                <button type="button" class="btn btn-sm btn-secondary" data-evidence-type="clip">Video Clips</button>
+                            </div>
                             <button id="refreshEvidence" class="btn btn-secondary" aria-label="Refresh evidence gallery">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
