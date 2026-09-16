@@ -1,5 +1,5 @@
 /* =========================================================
-   DESIGN TOKENS - Blue & White Theme
+   DESIGN TOKENS - Professional Blue & White Safety Theme
 ========================================================= */
 
 :root {
@@ -53,9 +53,9 @@
     --radius-lg: 14px;
     --radius-xl: 20px;
 
-    --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+    --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.06);
     --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
-    --shadow-lg: 0 10px 25px -3px rgba(15, 23, 42, 0.1), 0 4px 10px -2px rgba(15, 23, 42, 0.05);
+    --shadow-lg: 0 10px 25px -3px rgba(15, 23, 42, 0.12), 0 4px 10px -2px rgba(15, 23, 42, 0.05);
 
     --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -84,23 +84,24 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-/* Skip link for keyboard navigation */
+/* Skip link for accessibility */
 .skip-link {
     position: absolute;
-    top: -50px;
-    left: 10px;
+    top: -60px;
+    left: 12px;
     background: var(--blue-600);
     color: white;
-    padding: 10px 16px;
-    z-index: 1000;
-    font-weight: 600;
+    padding: 10px 18px;
+    z-index: 10000;
+    font-weight: 700;
     border-radius: var(--radius-sm);
-    transition: top 0.2s;
+    transition: top 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     text-decoration: none;
+    box-shadow: var(--shadow-lg);
 }
 
 .skip-link:focus {
-    top: 10px;
+    top: 12px;
 }
 
 /* Focus Visible outline standard */
@@ -134,7 +135,7 @@ body {
     position: fixed;
     top: 20px;
     right: 20px;
-    z-index: 1000;
+    z-index: 10000;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -183,12 +184,15 @@ body {
     border: none;
     color: var(--slate-400);
     cursor: pointer;
-    font-size: 18px;
+    font-size: 20px;
     line-height: 1;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    transition: color var(--transition);
 }
 
 .toast-close:hover {
-    color: var(--slate-700);
+    color: var(--slate-800);
 }
 
 @keyframes toastIn {
@@ -204,9 +208,9 @@ body {
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.75);
-    backdrop-filter: blur(4px);
-    z-index: 900;
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(6px);
+    z-index: 9000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -217,9 +221,9 @@ body {
 .modal-content {
     background: white;
     border-radius: var(--radius-lg);
-    max-width: 900px;
+    max-width: 960px;
     width: 100%;
-    max-height: 90vh;
+    max-height: 92vh;
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-lg);
@@ -232,17 +236,24 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 16px;
 }
 
-.modal-header h3 {
+.modal-title-group h3 {
     font-size: 18px;
     font-weight: 700;
     color: var(--slate-900);
 }
 
-.modal-header p {
+.modal-title-group p {
     font-size: 13px;
     color: var(--slate-500);
+}
+
+.modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .btn-icon {
@@ -270,15 +281,15 @@ body {
 
 .modal-media {
     width: 100%;
-    max-height: 500px;
+    max-height: 520px;
     object-fit: contain;
-    background: var(--slate-900);
+    background: var(--slate-950);
     border-radius: var(--radius-md);
 }
 
 
 /* =========================================================
-   SIDEBAR
+   SIDEBAR & LOGO
 ========================================================= */
 
 .sidebar {
@@ -316,7 +327,7 @@ body {
     align-items: center;
     justify-content: center;
     color: white;
-    box-shadow: 0 4px 12px rgba(12, 135, 235, 0.3);
+    box-shadow: 0 4px 12px rgba(12, 135, 235, 0.35);
     flex-shrink: 0;
 }
 
@@ -383,7 +394,7 @@ body {
     background: var(--red-600);
     color: white;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 800;
     padding: 2px 8px;
     border-radius: 12px;
     min-width: 20px;
@@ -405,7 +416,7 @@ body {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: var(--blue-200);
-    padding: 8px 12px;
+    padding: 9px 12px;
     border-radius: var(--radius-sm);
     font-size: 12px;
     font-weight: 600;
@@ -444,7 +455,7 @@ body {
 
 
 /* =========================================================
-   MAIN WRAPPER & HEADER
+   MAIN WRAPPER & TOP HEADER
 ========================================================= */
 
 .main-wrapper {
@@ -494,6 +505,40 @@ body {
     color: var(--slate-500);
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.platform-status-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--blue-50);
+    border: 1px solid var(--blue-200);
+    color: var(--blue-800);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 20px;
+}
+
+.chip-pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green-600);
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4);
+    animation: pulseDot 2s infinite;
+}
+
+@keyframes pulseDot {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+}
+
 .header-badge {
     position: relative;
     display: flex;
@@ -534,15 +579,15 @@ body {
 
 
 /* =========================================================
-   RISK HUD BANNER
+   RISK HUD BANNER & DETECTION LEGEND BAR
 ========================================================= */
 
 .risk-banner {
     background: white;
     border: 1px solid var(--slate-200);
     border-radius: var(--radius-lg);
-    padding: 16px 24px;
-    margin-bottom: 24px;
+    padding: 18px 24px;
+    margin-bottom: 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -575,7 +620,7 @@ body {
 }
 
 .banner-text h3 {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 800;
     line-height: 1.1;
 }
@@ -589,7 +634,7 @@ body {
 .metric-pill {
     background: var(--slate-100);
     border: 1px solid var(--slate-200);
-    padding: 8px 14px;
+    padding: 8px 16px;
     border-radius: var(--radius-md);
     display: flex;
     flex-direction: column;
@@ -637,6 +682,62 @@ body {
     from { box-shadow: 0 0 4px rgba(185, 28, 28, 0.2); }
     to { box-shadow: 0 0 16px rgba(185, 28, 28, 0.5); }
 }
+
+/* Monitored Capability Legend Bar */
+.detection-legend-bar {
+    background: white;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-md);
+    padding: 10px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: var(--shadow-sm);
+    flex-wrap: wrap;
+}
+
+.legend-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--slate-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.legend-items {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--slate-700);
+    background: var(--slate-100);
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--slate-200);
+}
+
+.legend-item .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.legend-ppe .dot { background: var(--blue-600); }
+.legend-tracking .dot { background: var(--green-600); }
+.legend-machinery .dot { background: var(--amber-600); }
+.legend-zone .dot { background: var(--orange-600); }
+.legend-fire .dot { background: var(--red-600); }
+.legend-pole .dot { background: var(--slate-600); }
 
 
 /* =========================================================
@@ -744,6 +845,12 @@ body {
     white-space: nowrap;
 }
 
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+}
+
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -790,14 +897,24 @@ body {
     border-color: var(--slate-400);
 }
 
-.select-input {
+.select-input, .text-input {
     padding: 9px 14px;
     border: 1px solid var(--slate-300);
     border-radius: var(--radius-md);
     font-size: 13px;
     color: var(--slate-700);
     background: white;
-    cursor: pointer;
+    transition: border-color var(--transition);
+}
+
+.text-input {
+    min-width: 200px;
+}
+
+.text-input:focus, .select-input:focus {
+    border-color: var(--blue-600);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(2, 106, 167, 0.15);
 }
 
 .fps-badge {
@@ -842,12 +959,32 @@ body {
     align-items: center;
     gap: 16px;
     color: var(--slate-400);
-    padding: 40px;
+    padding: 48px;
     text-align: center;
+    max-width: 520px;
 }
 
-.camera-placeholder svg {
-    opacity: 0.4;
+.placeholder-icon {
+    width: 80px;
+    height: 80px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--blue-400);
+}
+
+.camera-placeholder h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: white;
+}
+
+.camera-placeholder p {
+    font-size: 13px;
+    color: var(--slate-400);
+    line-height: 1.6;
 }
 
 .camera-footer {
@@ -980,7 +1117,7 @@ body {
 }
 
 .item-badge {
-    padding: 8px 14px;
+    padding: 10px 16px;
     border-radius: var(--radius-md);
     font-size: 13px;
     display: flex;
@@ -1055,6 +1192,18 @@ body {
     align-items: center;
     gap: 12px;
     color: var(--blue-700);
+}
+
+.dropzone-icon {
+    width: 64px;
+    height: 64px;
+    background: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-sm);
+    color: var(--blue-600);
 }
 
 .dropzone-title {
@@ -1207,6 +1356,23 @@ body {
 
 .data-table tbody tr:hover {
     background: var(--blue-50);
+}
+
+.table-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 24px;
+    border-top: 1px solid var(--slate-200);
+    background: var(--slate-50);
+    font-size: 13px;
+    color: var(--slate-600);
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 
@@ -1362,6 +1528,32 @@ body {
 
 
 /* =========================================================
+   PRINT STYLESHEET FOR SAFETY REPORTS
+========================================================= */
+
+@media print {
+    .sidebar, .top-header, .card-actions, .media-tabs, .btn, .skip-link, .toast-container {
+        display: none !important;
+    }
+    .main-wrapper {
+        margin-left: 0 !important;
+    }
+    .content {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
+    .tab-panel {
+        display: block !important;
+    }
+    .card {
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+}
+
+
+/* =========================================================
    RESPONSIVE DESIGN
 ========================================================= */
 
@@ -1380,4 +1572,5 @@ body {
     .content { padding: 20px 16px; }
     .risk-banner { flex-direction: column; align-items: flex-start; }
     .stats-grid { grid-template-columns: 1fr; }
+    .bar-row { grid-template-columns: 110px 1fr 40px; }
 }
