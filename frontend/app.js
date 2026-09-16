@@ -49,6 +49,8 @@ const ctx = canvas.getContext("2d");
 const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
 const fpsCounter = document.getElementById("fpsCounter");
+const sampleDemoBtn = document.getElementById("sampleDemoBtn");
+const sampleImageBtn = document.getElementById("sampleImageBtn");
 
 const connectionStatus = document.getElementById("connectionStatus");
 const cameraMessage = document.getElementById("cameraMessage");
@@ -73,6 +75,9 @@ const detectionList = document.getElementById("detectionList");
 const alertBadge = document.getElementById("alertBadge");
 const alertBadgeCount = document.getElementById("alertBadgeCount");
 const navAlertBadge = document.getElementById("navAlertBadge");
+const ackAllAlertsBtn = document.getElementById("ackAllAlertsBtn");
+
+const historySearchInput = document.getElementById("historySearchInput");
 
 const cameraPlaceholder = document.getElementById("cameraPlaceholder");
 const pageTitle = document.getElementById("pageTitle");
@@ -102,7 +107,9 @@ let sendingFrames = false;
 let awaitingResponse = false;
 let activeTab = "dashboard";
 let pollTimer = null;
-let audioEnabled = true;
+let audioEnabled = localStorage.getItem("safetyai_audio_enabled") !== "false";
+let evidenceFilterType = "all";
+let rawHistoryEvents = [];
 
 // FPS Calculation
 let frameCount = 0;
@@ -131,7 +138,7 @@ const RISK_COLORS = {
 
 
 // ============================================================
-// HELPERS
+// HELPERS & FORMATTING
 // ============================================================
 
 function fmtTime(ts) {
@@ -172,6 +179,14 @@ async function getJson(path) {
 // ============================================================
 // AUDIO SYNTHESIZER
 // ============================================================
+
+function initAudioUI() {
+    if (audioIconOn && audioIconOff && audioStatusText) {
+        audioIconOn.classList.toggle("hidden", !audioEnabled);
+        audioIconOff.classList.toggle("hidden", audioEnabled);
+        audioStatusText.textContent = audioEnabled ? "Audio On" : "Audio Off";
+    }
+}
 
 function playAlertSound(freq = 880, type = "sine", duration = 0.2) {
     if (!audioEnabled) return;
@@ -237,6 +252,7 @@ function openLightbox(title, subtitle, mediaHtml, detailHtml = "") {
         <div>${detailHtml}</div>
     `;
     lightboxModal.classList.remove("hidden");
+    closeModalBtn.focus();
 }
 
 function closeLightbox() {
@@ -251,9 +267,15 @@ if (lightboxModal) {
     });
 }
 
+window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !lightboxModal.classList.contains("hidden")) {
+        closeLightbox();
+    }
+});
+
 
 // ============================================================
-// UI UPDATE HELPERS (Live Camera HUD & Metrics)
+// UI UPDATE HELPERS (Live HUD & Metrics)
 // ============================================================
 
 function updateDetectionUI(summary, detections) {
@@ -342,7 +364,7 @@ function updateDetectionUI(summary, detections) {
         if (proximityList) {
             const proxAlerts = summary.proximity_alerts || [];
             if (proxAlerts.length === 0) {
-                proximityList.innerHTML = '<div class="empty-state"><p>No proximity breaches detected</p></div>';
+                proximityList.innerHTML = '<div class="empty-state"><p>No proximity hazards detected</p></div>';
             } else {
                 proximityList.innerHTML = proxAlerts.map(p => `
                     <div class="item-badge danger">
@@ -419,8 +441,8 @@ async function startCamera() {
 
     } catch (error) {
         console.error("Camera error:", error);
-        cameraMessage.textContent = "Could not access the site camera.";
-        showToast("Camera Error", "Camera access denied or unavailable", "HIGH");
+        cameraMessage.textContent = "Could not access camera. Try 'Test Sample' for demonstration.";
+        showToast("Camera Notice", "Camera access unavailable or denied. Use 'Test Sample' to test AI detection.", "HIGH");
     }
 }
 
@@ -565,6 +587,60 @@ function stopCamera() {
 
 
 // ============================================================
+// SAMPLE DEMO ANALYSIS TRIGGER
+// ============================================================
+
+async function runSampleAnalysis() {
+    cameraMessage.textContent = "Running sample site analysis test...";
+    showToast("Analysis Started", "Processing sample site test frame...", "LOW");
+
+    // Create a synthetic test image canvas with worker and hazard shapes
+    const testCanvas = document.createElement("canvas");
+    testCanvas.width = 640;
+    testCanvas.height = 480;
+    const c = testCanvas.getContext("2d");
+
+    // Background ground
+    c.fillStyle = "#334155";
+    c.fillRect(0, 0, 640, 480);
+    c.fillStyle = "#475569";
+    c.fillRect(0, 240, 640, 240);
+
+    // Simulated worker figure
+    c.fillStyle = "#3b82f6";
+    c.fillRect(200, 200, 50, 100);
+    c.fillStyle = "#f59e0b";
+    c.beginPath();
+    c.arc(225, 180, 20, 0, Math.PI * 2);
+    c.fill();
+
+    // Simulated machine figure
+    c.fillStyle = "#ea580c";
+    c.fillRect(350, 160, 180, 120);
+
+    testCanvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const file = new File([blob], "sample_site_test.jpg", { type: "image/jpeg" });
+        await handleImageUpload(file);
+
+        // Render result on main HUD canvas as well
+        const img = new Image();
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            if (cameraPlaceholder) cameraPlaceholder.style.display = "none";
+            cameraMessage.textContent = "Sample test analysis completed.";
+        };
+        img.src = imageAnnotatedPreview.src;
+    }, "image/jpeg");
+}
+
+if (sampleDemoBtn) sampleDemoBtn.addEventListener("click", runSampleAnalysis);
+if (sampleImageBtn) sampleImageBtn.addEventListener("click", runSampleAnalysis);
+
+
+// ============================================================
 // MEDIA ANALYSIS (Image & Video Upload Processing)
 // ============================================================
 
@@ -572,8 +648,12 @@ function stopCamera() {
 const mediaTabBtns = document.querySelectorAll(".media-tab-btn");
 mediaTabBtns.forEach(btn => {
     btn.addEventListener("click", () => {
-        mediaTabBtns.forEach(b => b.classList.remove("active"));
+        mediaTabBtns.forEach(b => {
+            b.classList.remove("active");
+            b.setAttribute("aria-selected", "false");
+        });
         btn.classList.add("active");
+        btn.setAttribute("aria-selected", "true");
         const type = btn.dataset.mediatab;
         document.getElementById("media-view-image").classList.toggle("hidden", type !== "image");
         document.getElementById("media-view-video").classList.toggle("hidden", type !== "video");
@@ -657,14 +737,19 @@ async function handleImageUpload(file) {
                 <div class="kv"><div class="k">Tracked Workers</div><div class="v">${summary.person_count || 0}</div></div>
                 <div class="kv"><div class="k">Machinery Detected</div><div class="v">${summary.machine_count || 0}</div></div>
             </div>
+            <div style="margin-bottom: 8px;">
+                <strong>Violation Breakdown:</strong> ${escapeHtml(violationSummary(summary.violation_counts))}
+            </div>
             <div>
-                <strong>Violation Types:</strong> ${escapeHtml(violationSummary(summary.violation_counts))}
+                <strong>Detections Count:</strong> ${detections.length} objects identified
             </div>
         `;
 
         imageProcessingState.classList.add("hidden");
         imageResultContainer.classList.remove("hidden");
         imageDropzone.classList.remove("hidden");
+
+        updateDetectionUI(summary, detections);
 
         showToast("Image Processed", `Detection completed. Risk Level: ${summary.risk_level || 'SAFE'}`, summary.risk_level === "CRITICAL" ? "CRITICAL" : "HIGH");
 
@@ -825,12 +910,13 @@ if (sidebarOverlay) {
 // AUDIO TOGGLE
 // ============================================================
 
+initAudioUI();
+
 if (audioToggleBtn) {
     audioToggleBtn.addEventListener("click", () => {
         audioEnabled = !audioEnabled;
-        audioIconOn.classList.toggle("hidden", !audioEnabled);
-        audioIconOff.classList.toggle("hidden", audioEnabled);
-        audioStatusText.textContent = audioEnabled ? "Audio On" : "Audio Off";
+        localStorage.setItem("safetyai_audio_enabled", audioEnabled);
+        initAudioUI();
         if (audioEnabled) playAlertSound(600, "sine", 0.1);
     });
 }
@@ -902,7 +988,7 @@ async function loadAlerts() {
         });
 
     } catch (err) {
-        list.innerHTML = `<div class="empty">Could not load alerts (${escapeHtml(err.message)}).</div>`;
+        list.innerHTML = `<div class="empty-state"><p>Could not load alerts (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
@@ -910,9 +996,28 @@ async function ackAlert(id) {
     try {
         await fetch(apiUrl(`/api/alerts/${id}/ack`), { method: "POST" });
         await Promise.all([loadAlerts(), loadAlertBadge()]);
+        showToast("Alert Acknowledged", `Alert #${id} marked acknowledged`, "LOW");
     } catch (err) {
         console.error("Ack failed:", err);
     }
+}
+
+if (ackAllAlertsBtn) {
+    ackAllAlertsBtn.addEventListener("click", async () => {
+        try {
+            const data = await getJson("/api/alerts?status=new&limit=100");
+            const unacked = data.alerts || [];
+            if (unacked.length === 0) {
+                showToast("Notice", "No unacknowledged alerts to clear.", "LOW");
+                return;
+            }
+            await Promise.all(unacked.map(a => fetch(apiUrl(`/api/alerts/${a.id}/ack`), { method: "POST" })));
+            await Promise.all([loadAlerts(), loadAlertBadge()]);
+            showToast("Alerts Cleared", `Acknowledged ${unacked.length} alert(s)`, "LOW");
+        } catch (err) {
+            console.error("Acknowledge all failed:", err);
+        }
+    });
 }
 
 
@@ -931,50 +1036,65 @@ async function loadHistory() {
 
     try {
         const data = await getJson(`/api/events?${params.toString()}`);
-        const events = data.events || [];
-
-        if (events.length === 0) {
-            body.innerHTML = '<tr><td colspan="8"><div class="empty">No recorded safety events matching filters.</div></td></tr>';
-            return;
-        }
-
-        body.innerHTML = events.map(e => {
-            const img = e.evidence_image ? `<a href="#" class="thumb-link" data-img="${evidenceUrl(e.evidence_image)}" data-id="${e.id}">Snapshot</a>` : "";
-            const clip = e.evidence_clip ? `<a href="#" class="thumb-link" data-clip="${evidenceUrl(e.evidence_clip)}" data-id="${e.id}">Video Clip</a>` : "";
-            const evidence = [img, clip].filter(Boolean).join(" · ") || "—";
-            return `
-                <tr>
-                    <td>${fmtTime(e.ts)}</td>
-                    <td><strong>${escapeHtml(e.source)}</strong></td>
-                    <td>${riskPill(e.risk_level)}</td>
-                    <td>${escapeHtml(violationSummary(e.violation_counts))}</td>
-                    <td>${e.persons ?? 0}</td>
-                    <td>${e.fire ?? 0}</td>
-                    <td>${e.smoke ?? 0}</td>
-                    <td>${evidence}</td>
-                </tr>
-            `;
-        }).join("");
-
-        body.querySelectorAll("a[data-img], a[data-clip]").forEach(link => {
-            link.addEventListener("click", (e) => {
-                e.preventDefault();
-                const img = link.dataset.img;
-                const clip = link.dataset.clip;
-                const id = link.dataset.id;
-                let mediaHtml = "";
-                if (clip) {
-                    mediaHtml = `<video class="modal-media" src="${clip}" controls autoplay></video>`;
-                } else if (img) {
-                    mediaHtml = `<img class="modal-media" src="${img}" alt="Event #${id}">`;
-                }
-                openLightbox(`Event #${id} Evidence Detail`, `Captured snapshot/recording`, mediaHtml);
-            });
-        });
-
+        rawHistoryEvents = data.events || [];
+        renderHistoryRows(rawHistoryEvents);
     } catch (err) {
-        body.innerHTML = `<tr><td colspan="8"><div class="empty">Could not load event history (${escapeHtml(err.message)}).</div></td></tr>`;
+        body.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>Could not load event history (${escapeHtml(err.message)})</p></div></td></tr>`;
     }
+}
+
+function renderHistoryRows(events) {
+    const body = document.getElementById("historyBody");
+    const search = (historySearchInput ? historySearchInput.value : "").toLowerCase().trim();
+
+    const filtered = events.filter(e => {
+        if (!search) return true;
+        const text = `${e.source} ${e.risk_level} ${JSON.stringify(e.violation_counts)}`.toLowerCase();
+        return text.includes(search);
+    });
+
+    if (filtered.length === 0) {
+        body.innerHTML = '<tr><td colspan="8"><div class="empty-state"><p>No recorded safety events matching filters</p></div></td></tr>';
+        return;
+    }
+
+    body.innerHTML = filtered.map(e => {
+        const img = e.evidence_image ? `<a href="#" class="thumb-link" data-img="${evidenceUrl(e.evidence_image)}" data-id="${e.id}">Snapshot</a>` : "";
+        const clip = e.evidence_clip ? `<a href="#" class="thumb-link" data-clip="${evidenceUrl(e.evidence_clip)}" data-id="${e.id}">Video Clip</a>` : "";
+        const evidence = [img, clip].filter(Boolean).join(" · ") || "—";
+        return `
+            <tr>
+                <td>${fmtTime(e.ts)}</td>
+                <td><strong>${escapeHtml(e.source)}</strong></td>
+                <td>${riskPill(e.risk_level)}</td>
+                <td>${escapeHtml(violationSummary(e.violation_counts))}</td>
+                <td>${e.persons ?? 0}</td>
+                <td>${e.fire ?? 0}</td>
+                <td>${e.smoke ?? 0}</td>
+                <td>${evidence}</td>
+            </tr>
+        `;
+    }).join("");
+
+    body.querySelectorAll("a[data-img], a[data-clip]").forEach(link => {
+        link.addEventListener("click", (e) => {
+            e.preventDefault();
+            const img = link.dataset.img;
+            const clip = link.dataset.clip;
+            const id = link.dataset.id;
+            let mediaHtml = "";
+            if (clip) {
+                mediaHtml = `<video class="modal-media" src="${clip}" controls autoplay></video>`;
+            } else if (img) {
+                mediaHtml = `<img class="modal-media" src="${img}" alt="Event #${id}">`;
+            }
+            openLightbox(`Event #${id} Evidence Detail`, `Captured snapshot/recording`, mediaHtml);
+        });
+    });
+}
+
+if (historySearchInput) {
+    historySearchInput.addEventListener("input", () => renderHistoryRows(rawHistoryEvents));
 }
 
 
@@ -987,7 +1107,7 @@ function barChart(container, entries, colorFn) {
     const items = entries.filter(([, v]) => v > 0);
 
     if (items.length === 0) {
-        el.innerHTML = '<div class="empty">No data available for this range.</div>';
+        el.innerHTML = '<div class="empty-state"><p>No data available for this range</p></div>';
         return;
     }
 
@@ -1038,7 +1158,7 @@ async function loadStatistics() {
         barChart("dayChart", Object.entries(r.by_day || {}));
 
     } catch (err) {
-        cards.innerHTML = `<div class="empty">Could not load statistics (${escapeHtml(err.message)}).</div>`;
+        cards.innerHTML = `<div class="empty-state"><p>Could not load statistics (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
@@ -1054,7 +1174,13 @@ async function loadEvidence() {
         const data = await getJson("/api/evidence?limit=60");
         const items = data.evidence || [];
 
-        if (items.length === 0) {
+        const filtered = items.filter(it => {
+            if (evidenceFilterType === "image") return !!it.image;
+            if (evidenceFilterType === "clip") return !!it.clip;
+            return true;
+        });
+
+        if (filtered.length === 0) {
             gallery.innerHTML = `
                 <div class="empty-state" style="grid-column: 1/-1">
                     <p>No evidence captured yet</p>
@@ -1063,7 +1189,7 @@ async function loadEvidence() {
             return;
         }
 
-        gallery.innerHTML = items.map(it => {
+        gallery.innerHTML = filtered.map(it => {
             let media;
             if (it.clip) {
                 media = `<video class="evidence-media" src="${evidenceUrl(it.clip)}" muted></video>`;
@@ -1103,9 +1229,19 @@ async function loadEvidence() {
         });
 
     } catch (err) {
-        gallery.innerHTML = `<div class="empty">Could not load evidence gallery (${escapeHtml(err.message)}).</div>`;
+        gallery.innerHTML = `<div class="empty-state"><p>Could not load evidence gallery (${escapeHtml(err.message)})</p></div>`;
     }
 }
+
+// Evidence filter buttons
+document.querySelectorAll(".evidence-filters button").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".evidence-filters button").forEach(b => b.classList.remove("active-filter"));
+        btn.classList.add("active-filter");
+        evidenceFilterType = btn.dataset.evfilter;
+        loadEvidence();
+    });
+});
 
 
 // ============================================================
@@ -1156,7 +1292,7 @@ async function loadReport() {
             <div style="margin-bottom: 24px;">
                 <h3 style="font-size: 16px; font-weight: 700; color: var(--slate-800); margin-bottom: 12px;">Events by Input Source</h3>
                 <div class="kv-grid">
-                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<div class="empty">No source data available.</div>'}
+                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<div class="empty-state"><p>No source data available</p></div>'}
                 </div>
             </div>
 
@@ -1167,14 +1303,14 @@ async function loadReport() {
                         <thead>
                             <tr><th>Time</th><th>Source</th><th>Risk Level</th><th>Violations</th><th>Detail</th></tr>
                         </thead>
-                        <tbody>${topRows || '<tr><td colspan="5"><div class="empty">No severe incidents recorded.</div></td></tr>'}</tbody>
+                        <tbody>${topRows || '<tr><td colspan="5"><div class="empty-state"><p>No severe incidents recorded</p></div></td></tr>'}</tbody>
                     </table>
                 </div>
             </div>
         `;
 
     } catch (err) {
-        summary.innerHTML = `<div class="empty">Could not generate report (${escapeHtml(err.message)}).</div>`;
+        summary.innerHTML = `<div class="empty-state"><p>Could not generate report (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
