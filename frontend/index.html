@@ -7,22 +7,22 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
+    <!-- Skip to main content for keyboard accessibility -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
 
     <!-- Notification Toast Container -->
     <div id="toastContainer" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
 
     <!-- Evidence Lightbox Modal -->
-    <div id="lightboxModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div id="lightboxModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalSubtitle">
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title-group">
                     <h3 id="modalTitle">Evidence Inspector</h3>
                     <p id="modalSubtitle">Safety violation snapshot / recording detail</p>
                 </div>
-                <button type="button" class="btn-icon" id="closeModalBtn" aria-label="Close modal">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button type="button" class="btn-icon" id="closeModalBtn" aria-label="Close evidence detail modal">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <line x1="18" y1="6" x2="6" y2="18"/>
                         <line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
@@ -35,7 +35,7 @@
     </div>
 
     <!-- Sidebar Navigation -->
-    <aside class="sidebar" id="sidebar" aria-label="Main Navigation">
+    <aside class="sidebar" id="sidebar" aria-label="Main Application Navigation">
         <div class="sidebar-header">
             <div class="logo">
                 <div class="logo-icon">
@@ -50,7 +50,7 @@
             </div>
         </div>
 
-        <nav class="sidebar-nav" role="tablist" aria-label="Dashboard sections">
+        <nav class="sidebar-nav" role="tablist" aria-label="Dashboard navigation tabs">
             <button class="nav-item active" role="tab" aria-selected="true" aria-controls="panel-dashboard" id="tab-dashboard" data-tab="dashboard">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <rect x="3" y="3" width="7" height="7" rx="1.5"/>
@@ -110,7 +110,7 @@
         </nav>
 
         <div class="sidebar-footer">
-            <button id="audioToggleBtn" class="btn-audio-toggle" aria-label="Toggle alert sound effects" title="Toggle audio alerts">
+            <button id="audioToggleBtn" class="btn-audio-toggle" aria-label="Toggle alert audio sound effects" title="Toggle audio alerts">
                 <svg id="audioIconOn" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
@@ -123,7 +123,7 @@
                 <span id="audioStatusText">Audio On</span>
             </button>
 
-            <div class="connection-indicator" id="connectionStatus" title="WebSocket status">
+            <div class="connection-indicator" id="connectionStatus" title="WebSocket stream connection status">
                 <span class="status-dot"></span>
                 <span class="status-text">Disconnected</span>
             </div>
@@ -134,7 +134,7 @@
     <div class="main-wrapper">
         <!-- Top Header Bar -->
         <header class="top-header">
-            <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle navigation menu">
+            <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle mobile menu drawer">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <line x1="3" y1="12" x2="21" y2="12"/>
                     <line x1="3" y1="6" x2="21" y2="6"/>
@@ -148,7 +148,7 @@
             </div>
 
             <div class="header-actions">
-                <button type="button" class="header-badge" id="alertBadge" title="Unacknowledged alerts feed" aria-label="Unacknowledged alerts feed">
+                <button type="button" class="header-badge" id="alertBadge" title="Unacknowledged alerts feed" aria-label="View unacknowledged alerts">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                         <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -159,7 +159,7 @@
         </header>
 
         <!-- Main Content Area -->
-        <main class="content" id="main-content" tabIndex="-1">
+        <main class="content" id="main-content" tabindex="-1">
 
             <!-- Live Safety Risk HUD Banner -->
             <div id="riskBanner" class="risk-banner banner-SAFE" role="region" aria-label="Real-time Risk Status">
@@ -213,6 +213,12 @@
                                 </svg>
                                 Stop Camera
                             </button>
+                            <button id="sampleDemoBtn" class="btn btn-secondary" aria-label="Run sample test analysis image">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                                </svg>
+                                Test Sample
+                            </button>
                         </div>
                     </div>
 
@@ -224,7 +230,7 @@
                                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                                 <circle cx="12" cy="13" r="4"/>
                             </svg>
-                            <p>Click "Start Camera" or select Media Analysis to process streams</p>
+                            <p>Click "Start Camera" or run "Test Sample" to analyze safety feeds</p>
                         </div>
                     </div>
 
@@ -361,6 +367,16 @@
                                 <h3>Image Hazard Detection</h3>
                                 <p>Upload job site photos to inspect PPE compliance, danger zones, and equipment proximity</p>
                             </div>
+                            <div class="card-actions">
+                                <button id="sampleImageBtn" class="btn btn-secondary">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                                        <polyline points="21 15 16 10 5 21"/>
+                                    </svg>
+                                    Analyze Sample Image
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="dropzone" id="imageDropzone">
@@ -467,6 +483,11 @@
                                 <option value="new">New / Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+
+                            <button id="ackAllAlertsBtn" class="btn btn-outline" aria-label="Acknowledge all active alerts">
+                                Acknowledge All
+                            </button>
+
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -494,6 +515,9 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                            <label for="historySearchInput" class="sr-only">Search history events</label>
+                            <input type="text" id="historySearchInput" class="text-input" placeholder="Search events..." aria-label="Search event history by text">
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
                                 <option value="">All risk levels</option>
@@ -613,6 +637,12 @@
                             <p>Automated JPEG snapshots and rolling MP4 clips captured during HIGH/CRITICAL events</p>
                         </div>
                         <div class="card-actions">
+                            <div class="evidence-filters">
+                                <button class="btn btn-outline active-filter" id="evidenceFilterAll" data-evfilter="all">All</button>
+                                <button class="btn btn-outline" id="evidenceFilterImg" data-evfilter="image">Snapshots</button>
+                                <button class="btn btn-outline" id="evidenceFilterClip" data-evfilter="clip">Video Clips</button>
+                            </div>
+
                             <button id="refreshEvidence" class="btn btn-secondary" aria-label="Refresh evidence gallery">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
