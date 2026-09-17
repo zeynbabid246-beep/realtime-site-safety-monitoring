@@ -598,6 +598,12 @@ def api_alerts(
     }
 
 
+@app.post("/api/alerts/ack-all")
+def api_ack_all_alerts():
+    count = get_db().ack_all_alerts()
+    return {"success": True, "acknowledged_count": count}
+
+
 @app.post("/api/alerts/{alert_id}/ack")
 def api_ack_alert(alert_id: int):
     ok = get_db().ack_alert(alert_id)
