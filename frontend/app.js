@@ -65,6 +65,11 @@ const ppeStatus = document.getElementById("ppeStatus");
 const fireStatus = document.getElementById("fireStatus");
 const smokeStatus = document.getElementById("smokeStatus");
 const personStatus = document.getElementById("personStatus");
+const machineryStatus = document.getElementById("machineryStatus");
+const zoneStatus = document.getElementById("zoneStatus");
+const ackAllAlertsBtn = document.getElementById("ackAllAlertsBtn");
+const resetImageBtn = document.getElementById("resetImageBtn");
+const resetVideoBtn = document.getElementById("resetVideoBtn");
 
 const proximityList = document.getElementById("proximityList");
 const zoneList = document.getElementById("zoneList");
@@ -103,6 +108,7 @@ let awaitingResponse = false;
 let activeTab = "dashboard";
 let pollTimer = null;
 let audioEnabled = true;
+let currentEvidenceFilter = "all";
 
 // FPS Calculation
 let frameCount = 0;
@@ -338,6 +344,20 @@ function updateDetectionUI(summary, detections) {
             }
         }
 
+        // Machinery Card Status
+        if (machineryStatus) {
+            const count = summary.machine_count || 0;
+            machineryStatus.textContent = count > 0 ? `${count} Active` : "0 Active";
+            machineryStatus.style.color = count > 0 ? "#026aa7" : "#64748b";
+        }
+
+        // Danger Zone Card Status
+        if (zoneStatus) {
+            const count = (summary.danger_zones || []).length;
+            zoneStatus.textContent = count > 0 ? `${count} Active` : "0 Active";
+            zoneStatus.style.color = count > 0 ? "#ea580c" : "#64748b";
+        }
+
         // Proximity Breaches List
         if (proximityList) {
             const proxAlerts = summary.proximity_alerts || [];
@@ -553,6 +573,8 @@ function stopCamera() {
     smokeStatus.style.color = "";
     personStatus.textContent = "None";
     personStatus.style.color = "";
+    if (machineryStatus) { machineryStatus.textContent = "0 Active"; machineryStatus.style.color = ""; }
+    if (zoneStatus) { zoneStatus.textContent = "0 Active"; zoneStatus.style.color = ""; }
 
     if (riskBadge) {
         const valueEl = riskBadge.querySelector(".risk-value");
@@ -915,6 +937,30 @@ async function ackAlert(id) {
     }
 }
 
+async function ackAllAlerts() {
+    try {
+        const res = await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+        if (res.ok) {
+            const data = await res.json();
+            showToast("Alerts Acknowledged", `Bulk acknowledged ${data.acknowledged_count || 0} alert(s)`, "SAFE");
+        } else {
+            // Fallback to acknowledging unacknowledged alerts individually
+            const data = await getJson("/api/alerts?status=new&limit=100");
+            const alerts = data.alerts || [];
+            let count = 0;
+            for (const a of alerts) {
+                await fetch(apiUrl(`/api/alerts/${a.id}/ack`), { method: "POST" });
+                count++;
+            }
+            showToast("Alerts Acknowledged", `Acknowledged ${count} alert(s)`, "SAFE");
+        }
+        await Promise.all([loadAlerts(), loadAlertBadge()]);
+    } catch (err) {
+        console.error("Ack all failed:", err);
+        showToast("Action Failed", err.message || "Failed to acknowledge alerts", "HIGH");
+    }
+}
+
 
 // ============================================================
 // HISTORY TAB
@@ -1052,12 +1098,18 @@ async function loadEvidence() {
 
     try {
         const data = await getJson("/api/evidence?limit=60");
-        const items = data.evidence || [];
+        let items = data.evidence || [];
+
+        if (currentEvidenceFilter === "image") {
+            items = items.filter(it => it.image && !it.clip);
+        } else if (currentEvidenceFilter === "clip") {
+            items = items.filter(it => it.clip);
+        }
 
         if (items.length === 0) {
             gallery.innerHTML = `
                 <div class="empty-state" style="grid-column: 1/-1">
-                    <p>No evidence captured yet</p>
+                    <p>No evidence matching filter criteria</p>
                     <span>High and critical risk safety violations automatically capture annotated evidence</span>
                 </div>`;
             return;
@@ -1209,6 +1261,36 @@ document.querySelector(".sidebar-nav").addEventListener("click", (e) => {
 
 document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);
 document.getElementById("alertStatusFilter").addEventListener("change", loadAlerts);
+if (ackAllAlertsBtn) {
+    ackAllAlertsBtn.addEventListener("click", ackAllAlerts);
+}
+
+document.querySelectorAll("[data-evidence-filter]").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll("[data-evidence-filter]").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentEvidenceFilter = btn.dataset.evidenceFilter;
+        loadEvidence();
+    });
+});
+
+if (resetImageBtn) {
+    resetImageBtn.addEventListener("click", () => {
+        imageResultContainer.classList.add("hidden");
+        imageFileInput.value = "";
+        imageDropzone.classList.remove("hidden");
+    });
+}
+
+if (resetVideoBtn) {
+    resetVideoBtn.addEventListener("click", () => {
+        videoResultContainer.classList.add("hidden");
+        videoResultPlayer.pause();
+        videoResultPlayer.src = "";
+        videoFileInput.value = "";
+        videoDropzone.classList.remove("hidden");
+    });
+}
 
 document.getElementById("refreshHistory").addEventListener("click", loadHistory);
 document.getElementById("historyRiskFilter").addEventListener("change", loadHistory);
