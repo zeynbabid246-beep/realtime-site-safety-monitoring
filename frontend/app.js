@@ -48,6 +48,8 @@ const ctx = canvas.getContext("2d");
 
 const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
+const fullscreenBtn = document.getElementById("fullscreenBtn");
+const cameraContainer = document.getElementById("cameraContainer");
 const fpsCounter = document.getElementById("fpsCounter");
 
 const connectionStatus = document.getElementById("connectionStatus");
@@ -85,6 +87,10 @@ const audioToggleBtn = document.getElementById("audioToggleBtn");
 const audioIconOn = document.getElementById("audioIconOn");
 const audioIconOff = document.getElementById("audioIconOff");
 const audioStatusText = document.getElementById("audioStatusText");
+
+const shortcutsBtn = document.getElementById("shortcutsBtn");
+const shortcutsModal = document.getElementById("shortcutsModal");
+const closeShortcutsBtn = document.getElementById("closeShortcutsBtn");
 
 const toastContainer = document.getElementById("toastContainer");
 const lightboxModal = document.getElementById("lightboxModal");
@@ -131,7 +137,7 @@ const RISK_COLORS = {
 
 
 // ============================================================
-// HELPERS
+// HELPERS & CLASS HUMANIZER
 // ============================================================
 
 function fmtTime(ts) {
@@ -152,6 +158,42 @@ function escapeHtml(value) {
 function riskPill(level) {
     const safe = escapeHtml(level || "SAFE");
     return `<span class="risk-pill risk-${safe}">${safe}</span>`;
+}
+
+function humanizeClass(clsName, trackId) {
+    const raw = String(clsName || "").trim();
+    const trackStr = trackId != null ? ` #${trackId}` : "";
+
+    switch (raw) {
+        case "Person":
+            return { label: `👤 Worker${trackStr}`, styleClass: "det-tag-worker" };
+        case "Hardhat":
+            return { label: `⛑️ Hardhat`, styleClass: "det-tag-ppe-ok" };
+        case "NO-Hardhat":
+            return { label: `⚠️ Missing Hardhat`, styleClass: "det-tag-ppe-missing" };
+        case "Safety Vest":
+            return { label: `🦺 Safety Vest`, styleClass: "det-tag-ppe-ok" };
+        case "NO-Safety Vest":
+            return { label: `⚠️ Missing Vest`, styleClass: "det-tag-ppe-missing" };
+        case "Mask":
+            return { label: `😷 Mask`, styleClass: "det-tag-ppe-ok" };
+        case "NO-Mask":
+            return { label: `⚠️ Missing Mask`, styleClass: "det-tag-ppe-missing" };
+        case "machinery":
+            return { label: `🚜 Heavy Machinery${trackStr}`, styleClass: "det-tag-machine" };
+        case "vehicle":
+            return { label: `🚛 Vehicle${trackStr}`, styleClass: "det-tag-machine" };
+        case "utility pole":
+            return { label: `💈 Utility Pole`, styleClass: "det-tag-cone" };
+        case "Safety Cone":
+            return { label: `🟠 Safety Cone`, styleClass: "det-tag-cone" };
+        case "Fire":
+            return { label: `🔥 FIRE DETECTED`, styleClass: "det-tag-fire" };
+        case "Smoke":
+            return { label: `💨 SMOKE DETECTED`, styleClass: "det-tag-fire" };
+        default:
+            return { label: `${escapeHtml(raw)}${trackStr}`, styleClass: "det-tag-worker" };
+    }
 }
 
 function violationSummary(counts) {
@@ -226,7 +268,7 @@ function showToast(title, message, level = "HIGH") {
 
 
 // ============================================================
-// LIGHTBOX MODAL
+// LIGHTBOX & SHORTCUTS MODAL
 // ============================================================
 
 function openLightbox(title, subtitle, mediaHtml, detailHtml = "") {
@@ -244,12 +286,50 @@ function closeLightbox() {
     modalBody.innerHTML = "";
 }
 
+function openShortcutsModal() {
+    if (shortcutsModal) shortcutsModal.classList.remove("hidden");
+}
+
+function closeShortcutsModal() {
+    if (shortcutsModal) shortcutsModal.classList.add("hidden");
+}
+
 if (closeModalBtn) closeModalBtn.addEventListener("click", closeLightbox);
 if (lightboxModal) {
     lightboxModal.addEventListener("click", (e) => {
         if (e.target === lightboxModal) closeLightbox();
     });
 }
+
+if (shortcutsBtn) shortcutsBtn.addEventListener("click", openShortcutsModal);
+if (closeShortcutsBtn) closeShortcutsBtn.addEventListener("click", closeShortcutsModal);
+if (shortcutsModal) {
+    shortcutsModal.addEventListener("click", (e) => {
+        if (e.target === shortcutsModal) closeShortcutsModal();
+    });
+}
+
+
+// ============================================================
+// FULLSCREEN CAMERA STREAM TOGGLE
+// ============================================================
+
+function toggleCameraFullscreen() {
+    if (!cameraContainer) return;
+    cameraContainer.classList.toggle("is-fullscreen");
+    const isFS = cameraContainer.classList.contains("is-fullscreen");
+    fullscreenBtn.innerHTML = isFS ? `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+        </svg> Exit Fullscreen
+    ` : `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg> Fullscreen
+    `;
+}
+
+if (fullscreenBtn) fullscreenBtn.addEventListener("click", toggleCameraFullscreen);
 
 
 // ============================================================
@@ -373,7 +453,7 @@ function updateDetectionUI(summary, detections) {
         }
     }
 
-    // Bounding Box / Detections List
+    // Formatted Bounding Box Detections List
     if (Array.isArray(detections) && detectionList) {
         if (detections.length === 0) {
             detectionList.innerHTML = `
@@ -382,11 +462,12 @@ function updateDetectionUI(summary, detections) {
                 </div>`;
         } else {
             detectionList.innerHTML = detections.map(d => {
-                const trackStr = d.track_id != null ? `[ID:${d.track_id}]` : "";
+                const info = humanizeClass(d.class, d.track_id);
+                const confPct = (d.confidence * 100).toFixed(1);
                 return `
-                    <div class="detection">
-                        <strong>${escapeHtml(d.class)} ${trackStr}</strong> (${(d.confidence * 100).toFixed(1)}%)
-                    </div>
+                    <span class="det-tag ${info.styleClass}">
+                        ${info.label} (${confPct}%)
+                    </span>
                 `;
             }).join("");
         }
@@ -568,7 +649,6 @@ function stopCamera() {
 // MEDIA ANALYSIS (Image & Video Upload Processing)
 // ============================================================
 
-// Tab switching between Image and Video analysis
 const mediaTabBtns = document.querySelectorAll(".media-tab-btn");
 mediaTabBtns.forEach(btn => {
     btn.addEventListener("click", () => {
@@ -580,7 +660,7 @@ mediaTabBtns.forEach(btn => {
     });
 });
 
-// IMAGE UPLOAD HANDLING
+// IMAGE UPLOAD HANDLING & RESET
 const imageDropzone = document.getElementById("imageDropzone");
 const imageFileInput = document.getElementById("imageFileInput");
 const imageProcessingState = document.getElementById("imageProcessingState");
@@ -588,6 +668,7 @@ const imageResultContainer = document.getElementById("imageResultContainer");
 const imageOriginalPreview = document.getElementById("imageOriginalPreview");
 const imageAnnotatedPreview = document.getElementById("imageAnnotatedPreview");
 const imageSummaryCard = document.getElementById("imageSummaryCard");
+const resetImageBtn = document.getElementById("resetImageBtn");
 
 if (imageDropzone && imageFileInput) {
     imageDropzone.addEventListener("click", () => imageFileInput.click());
@@ -610,6 +691,16 @@ if (imageDropzone && imageFileInput) {
     });
 }
 
+function resetImageAnalysis() {
+    imageResultContainer.classList.add("hidden");
+    imageProcessingState.classList.add("hidden");
+    imageDropzone.classList.remove("hidden");
+    if (resetImageBtn) resetImageBtn.classList.add("hidden");
+    imageFileInput.value = "";
+}
+
+if (resetImageBtn) resetImageBtn.addEventListener("click", resetImageAnalysis);
+
 async function handleImageUpload(file) {
     if (!file.type.startsWith("image/")) {
         showToast("Invalid File", "Please upload a valid image file (PNG, JPG, WEBP)", "HIGH");
@@ -619,8 +710,8 @@ async function handleImageUpload(file) {
     imageDropzone.classList.add("hidden");
     imageProcessingState.classList.remove("hidden");
     imageResultContainer.classList.add("hidden");
+    if (resetImageBtn) resetImageBtn.classList.add("hidden");
 
-    // Preview Original
     imageOriginalPreview.src = URL.createObjectURL(file);
 
     const formData = new FormData();
@@ -642,10 +733,13 @@ async function handleImageUpload(file) {
         const summary = data.result.summary || {};
         const detections = data.result.detections || [];
 
-        // Set Annotated Image URL
         imageAnnotatedPreview.src = outputUrl(data.annotated_image_path);
 
-        // Render Summary Details
+        const formattedTags = detections.map(d => {
+            const info = humanizeClass(d.class, d.track_id);
+            return `<span class="det-tag ${info.styleClass}">${info.label} (${(d.confidence * 100).toFixed(1)}%)</span>`;
+        }).join(" ");
+
         imageSummaryCard.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h4 style="font-size: 16px; font-weight: 700; color: var(--slate-900);">Safety Analysis Summary</h4>
@@ -657,14 +751,18 @@ async function handleImageUpload(file) {
                 <div class="kv"><div class="k">Tracked Workers</div><div class="v">${summary.person_count || 0}</div></div>
                 <div class="kv"><div class="k">Machinery Detected</div><div class="v">${summary.machine_count || 0}</div></div>
             </div>
+            <div style="margin-bottom: 12px;">
+                <strong>Objects & Hazards Identified:</strong>
+                <div style="margin-top: 8px;">${formattedTags || 'None'}</div>
+            </div>
             <div>
-                <strong>Violation Types:</strong> ${escapeHtml(violationSummary(summary.violation_counts))}
+                <strong>Violation Types Breakdown:</strong> ${escapeHtml(violationSummary(summary.violation_counts))}
             </div>
         `;
 
         imageProcessingState.classList.add("hidden");
         imageResultContainer.classList.remove("hidden");
-        imageDropzone.classList.remove("hidden");
+        if (resetImageBtn) resetImageBtn.classList.remove("hidden");
 
         showToast("Image Processed", `Detection completed. Risk Level: ${summary.risk_level || 'SAFE'}`, summary.risk_level === "CRITICAL" ? "CRITICAL" : "HIGH");
 
@@ -676,7 +774,7 @@ async function handleImageUpload(file) {
     }
 }
 
-// VIDEO UPLOAD HANDLING
+// VIDEO UPLOAD HANDLING & RESET
 const videoDropzone = document.getElementById("videoDropzone");
 const videoFileInput = document.getElementById("videoFileInput");
 const videoProcessingState = document.getElementById("videoProcessingState");
@@ -684,6 +782,7 @@ const videoResultContainer = document.getElementById("videoResultContainer");
 const videoResultPlayer = document.getElementById("videoResultPlayer");
 const videoDownloadBtn = document.getElementById("videoDownloadBtn");
 const videoSummaryCard = document.getElementById("videoSummaryCard");
+const resetVideoBtn = document.getElementById("resetVideoBtn");
 
 if (videoDropzone && videoFileInput) {
     videoDropzone.addEventListener("click", () => videoFileInput.click());
@@ -706,6 +805,17 @@ if (videoDropzone && videoFileInput) {
     });
 }
 
+function resetVideoAnalysis() {
+    videoResultContainer.classList.add("hidden");
+    videoProcessingState.classList.add("hidden");
+    videoDropzone.classList.remove("hidden");
+    if (resetVideoBtn) resetVideoBtn.classList.add("hidden");
+    videoFileInput.value = "";
+    videoResultPlayer.src = "";
+}
+
+if (resetVideoBtn) resetVideoBtn.addEventListener("click", resetVideoAnalysis);
+
 async function handleVideoUpload(file) {
     if (!file.type.startsWith("video/")) {
         showToast("Invalid File", "Please upload a valid video file (MP4, AVI, MOV)", "HIGH");
@@ -715,6 +825,7 @@ async function handleVideoUpload(file) {
     videoDropzone.classList.add("hidden");
     videoProcessingState.classList.remove("hidden");
     videoResultContainer.classList.add("hidden");
+    if (resetVideoBtn) resetVideoBtn.classList.add("hidden");
 
     const formData = new FormData();
     formData.append("file", file);
@@ -755,7 +866,7 @@ async function handleVideoUpload(file) {
 
         videoProcessingState.classList.add("hidden");
         videoResultContainer.classList.remove("hidden");
-        videoDropzone.classList.remove("hidden");
+        if (resetVideoBtn) resetVideoBtn.classList.remove("hidden");
 
         showToast("Video Processing Complete", `Successfully analyzed ${framesProcessed} video frames`, "HIGH");
 
@@ -822,7 +933,7 @@ if (sidebarOverlay) {
 
 
 // ============================================================
-// AUDIO TOGGLE
+// AUDIO TOGGLE & KEYBOARD SHORTCUTS
 // ============================================================
 
 if (audioToggleBtn) {
@@ -835,9 +946,44 @@ if (audioToggleBtn) {
     });
 }
 
+// Global Keyboard Shortcuts Handler
+window.addEventListener("keydown", (e) => {
+    // Ignore when typing inside text inputs / search boxes
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
+
+    if (e.altKey && e.key >= "1" && e.key <= "7") {
+        e.preventDefault();
+        const tabMap = ["dashboard", "detection", "alerts", "history", "statistics", "evidence", "reports"];
+        const idx = parseInt(e.key, 10) - 1;
+        if (tabMap[idx]) switchTab(tabMap[idx]);
+    } else if (e.key === " " || e.code === "Space") {
+        if (activeTab === "dashboard") {
+            e.preventDefault();
+            if (sendingFrames) stopCamera();
+            else startCamera();
+        }
+    } else if (e.key === "f" || e.key === "F") {
+        if (activeTab === "dashboard") {
+            e.preventDefault();
+            toggleCameraFullscreen();
+        }
+    } else if (e.key === "m" || e.key === "M") {
+        if (audioToggleBtn) audioToggleBtn.click();
+    } else if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        e.preventDefault();
+        openShortcutsModal();
+    } else if (e.key === "Escape") {
+        closeLightbox();
+        closeShortcutsModal();
+        if (cameraContainer && cameraContainer.classList.contains("is-fullscreen")) {
+            toggleCameraFullscreen();
+        }
+    }
+});
+
 
 // ============================================================
-// ALERT BADGE & FEED
+// ALERT BADGE, ACK-ALL, & SEARCH FILTER
 // ============================================================
 
 async function loadAlertBadge() {
@@ -864,16 +1010,26 @@ async function loadAlertBadge() {
 async function loadAlerts() {
     const list = document.getElementById("alertsList");
     const status = document.getElementById("alertStatusFilter").value;
+    const searchVal = (document.getElementById("alertSearchInput")?.value || "").toLowerCase().trim();
+
     const qs = status ? `?status=${encodeURIComponent(status)}&limit=100` : "?limit=100";
 
     try {
         const data = await getJson(`/api/alerts${qs}`);
-        const alerts = data.alerts || [];
+        let alerts = data.alerts || [];
+
+        if (searchVal) {
+            alerts = alerts.filter(a =>
+                (a.title || "").toLowerCase().includes(searchVal) ||
+                (a.message || "").toLowerCase().includes(searchVal) ||
+                (a.level || "").toLowerCase().includes(searchVal)
+            );
+        }
 
         if (alerts.length === 0) {
             list.innerHTML = `
                 <div class="empty-state">
-                    <p>No active alerts matching filter criteria</p>
+                    <p>No active alerts matching search or filter criteria</p>
                 </div>`;
             return;
         }
@@ -882,7 +1038,7 @@ async function loadAlerts() {
             const acked = a.status === "acknowledged";
             const ackControl = acked
                 ? '<span class="alert-ack">✓ Acknowledged</span>'
-                : `<button class="btn btn-primary" data-ack="${a.id}">Acknowledge</button>`;
+                : `<button class="btn btn-primary btn-sm" data-ack="${a.id}">Acknowledge</button>`;
             return `
                 <div class="alert-item level-${escapeHtml(a.level)}">
                     <div class="alert-main">
@@ -902,7 +1058,7 @@ async function loadAlerts() {
         });
 
     } catch (err) {
-        list.innerHTML = `<div class="empty">Could not load alerts (${escapeHtml(err.message)}).</div>`;
+        list.innerHTML = `<div class="empty-state"><p>Could not load alerts (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
@@ -915,6 +1071,24 @@ async function ackAlert(id) {
     }
 }
 
+const ackAllAlertsBtn = document.getElementById("ackAllAlertsBtn");
+if (ackAllAlertsBtn) {
+    ackAllAlertsBtn.addEventListener("click", async () => {
+        try {
+            await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+            showToast("Alerts Cleared", "All active alerts acknowledged", "SAFE");
+            await Promise.all([loadAlerts(), loadAlertBadge()]);
+        } catch (err) {
+            console.error("Ack all failed:", err);
+        }
+    });
+}
+
+const alertSearchInput = document.getElementById("alertSearchInput");
+if (alertSearchInput) {
+    alertSearchInput.addEventListener("input", loadAlerts);
+}
+
 
 // ============================================================
 // HISTORY TAB
@@ -924,6 +1098,7 @@ async function loadHistory() {
     const body = document.getElementById("historyBody");
     const risk = document.getElementById("historyRiskFilter").value;
     const source = document.getElementById("historySourceFilter").value;
+    const searchVal = (document.getElementById("historySearchInput")?.value || "").toLowerCase().trim();
 
     const params = new URLSearchParams({ limit: "200" });
     if (risk) params.set("risk", risk);
@@ -931,10 +1106,19 @@ async function loadHistory() {
 
     try {
         const data = await getJson(`/api/events?${params.toString()}`);
-        const events = data.events || [];
+        let events = data.events || [];
+
+        if (searchVal) {
+            events = events.filter(e => {
+                const summaryStr = JSON.stringify(e.violation_counts || {}).toLowerCase();
+                const sourceStr = (e.source || "").toLowerCase();
+                const riskStr = (e.risk_level || "").toLowerCase();
+                return summaryStr.includes(searchVal) || sourceStr.includes(searchVal) || riskStr.includes(searchVal);
+            });
+        }
 
         if (events.length === 0) {
-            body.innerHTML = '<tr><td colspan="8"><div class="empty">No recorded safety events matching filters.</div></td></tr>';
+            body.innerHTML = '<tr><td colspan="8"><div class="empty-state"><p>No recorded safety events matching filters.</p></div></td></tr>';
             return;
         }
 
@@ -973,8 +1157,13 @@ async function loadHistory() {
         });
 
     } catch (err) {
-        body.innerHTML = `<tr><td colspan="8"><div class="empty">Could not load event history (${escapeHtml(err.message)}).</div></td></tr>`;
+        body.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>Could not load event history (${escapeHtml(err.message)}).</p></div></td></tr>`;
     }
+}
+
+const historySearchInput = document.getElementById("historySearchInput");
+if (historySearchInput) {
+    historySearchInput.addEventListener("input", loadHistory);
 }
 
 
@@ -987,7 +1176,7 @@ function barChart(container, entries, colorFn) {
     const items = entries.filter(([, v]) => v > 0);
 
     if (items.length === 0) {
-        el.innerHTML = '<div class="empty">No data available for this range.</div>';
+        el.innerHTML = '<div class="empty-state"><p>No data available for this range.</p></div>';
         return;
     }
 
@@ -1038,7 +1227,7 @@ async function loadStatistics() {
         barChart("dayChart", Object.entries(r.by_day || {}));
 
     } catch (err) {
-        cards.innerHTML = `<div class="empty">Could not load statistics (${escapeHtml(err.message)}).</div>`;
+        cards.innerHTML = `<div class="empty-state"><p>Could not load statistics (${escapeHtml(err.message)})</p></div>`;
     }
 }
 
@@ -1049,15 +1238,22 @@ async function loadStatistics() {
 
 async function loadEvidence() {
     const gallery = document.getElementById("evidenceGallery");
+    const typeFilter = document.getElementById("evidenceTypeFilter")?.value || "";
 
     try {
         const data = await getJson("/api/evidence?limit=60");
-        const items = data.evidence || [];
+        let items = data.evidence || [];
+
+        if (typeFilter === "clip") {
+            items = items.filter(it => Boolean(it.clip));
+        } else if (typeFilter === "image") {
+            items = items.filter(it => Boolean(it.image));
+        }
 
         if (items.length === 0) {
             gallery.innerHTML = `
                 <div class="empty-state" style="grid-column: 1/-1">
-                    <p>No evidence captured yet</p>
+                    <p>No evidence captured matching filter criteria</p>
                     <span>High and critical risk safety violations automatically capture annotated evidence</span>
                 </div>`;
             return;
@@ -1103,8 +1299,13 @@ async function loadEvidence() {
         });
 
     } catch (err) {
-        gallery.innerHTML = `<div class="empty">Could not load evidence gallery (${escapeHtml(err.message)}).</div>`;
+        gallery.innerHTML = `<div class="empty-state"><p>Could not load evidence gallery (${escapeHtml(err.message)})</p></div>`;
     }
+}
+
+const evidenceTypeFilter = document.getElementById("evidenceTypeFilter");
+if (evidenceTypeFilter) {
+    evidenceTypeFilter.addEventListener("change", loadEvidence);
 }
 
 
@@ -1156,7 +1357,7 @@ async function loadReport() {
             <div style="margin-bottom: 24px;">
                 <h3 style="font-size: 16px; font-weight: 700; color: var(--slate-800); margin-bottom: 12px;">Events by Input Source</h3>
                 <div class="kv-grid">
-                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<div class="empty">No source data available.</div>'}
+                    ${Object.entries(r.by_source || {}).map(([k, v]) => kv(k, v)).join("") || '<div class="empty-state"><p>No source data available.</p></div>'}
                 </div>
             </div>
 
@@ -1167,14 +1368,14 @@ async function loadReport() {
                         <thead>
                             <tr><th>Time</th><th>Source</th><th>Risk Level</th><th>Violations</th><th>Detail</th></tr>
                         </thead>
-                        <tbody>${topRows || '<tr><td colspan="5"><div class="empty">No severe incidents recorded.</div></td></tr>'}</tbody>
+                        <tbody>${topRows || '<tr><td colspan="5"><div class="empty-state"><p>No severe incidents recorded.</p></div></td></tr>'}</tbody>
                     </table>
                 </div>
             </div>
         `;
 
     } catch (err) {
-        summary.innerHTML = `<div class="empty">Could not generate report (${escapeHtml(err.message)}).</div>`;
+        summary.innerHTML = `<div class="empty-state"><p>Could not generate report (${escapeHtml(err.message)})</p></div>`;
     }
 }
 

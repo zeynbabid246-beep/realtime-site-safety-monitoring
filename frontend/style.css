@@ -1,5 +1,5 @@
 /* =========================================================
-   DESIGN TOKENS - Blue & White Theme
+   DESIGN TOKENS - Blue & White Theme & Design System
 ========================================================= */
 
 :root {
@@ -198,7 +198,7 @@ body {
 
 
 /* =========================================================
-   LIGHTBOX MODAL
+   LIGHTBOX & SHORTCUTS MODAL
 ========================================================= */
 
 .modal-backdrop {
@@ -224,6 +224,10 @@ body {
     flex-direction: column;
     box-shadow: var(--shadow-lg);
     overflow: hidden;
+}
+
+.modal-content-sm {
+    max-width: 520px;
 }
 
 .modal-header {
@@ -274,6 +278,38 @@ body {
     object-fit: contain;
     background: var(--slate-900);
     border-radius: var(--radius-md);
+}
+
+/* Keyboard Shortcuts Grid Styling */
+.shortcuts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--slate-50);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--slate-200);
+    font-size: 13px;
+    color: var(--slate-700);
+}
+
+kbd {
+    background: white;
+    border: 1px solid var(--slate-300);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--slate-800);
+    box-shadow: 0 1px 1px rgba(0,0,0,0.05);
 }
 
 
@@ -395,9 +431,10 @@ body {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
 }
 
+.btn-sidebar-secondary,
 .btn-audio-toggle {
     display: flex;
     align-items: center;
@@ -414,6 +451,7 @@ body {
     width: 100%;
 }
 
+.btn-sidebar-secondary:hover,
 .btn-audio-toggle:hover {
     background: rgba(255, 255, 255, 0.12);
     color: white;
@@ -426,6 +464,7 @@ body {
     font-size: 12px;
     color: var(--slate-400);
     font-weight: 500;
+    margin-top: 4px;
 }
 
 .status-dot {
@@ -725,7 +764,7 @@ body {
 
 
 /* =========================================================
-   BUTTONS & INPUTS
+   BUTTONS & INPUTS & SEARCH
 ========================================================= */
 
 .btn {
@@ -742,6 +781,12 @@ body {
     transition: all var(--transition);
     text-decoration: none;
     white-space: nowrap;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
 }
 
 .btn:disabled {
@@ -800,6 +845,28 @@ body {
     cursor: pointer;
 }
 
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-input {
+    padding: 8px 12px;
+    border: 1px solid var(--slate-300);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    color: var(--slate-800);
+    background: white;
+    min-width: 180px;
+    transition: border-color var(--transition);
+}
+
+.search-input:focus {
+    border-color: var(--blue-600);
+    outline: none;
+}
+
 .fps-badge {
     background: var(--blue-50);
     color: var(--blue-700);
@@ -823,6 +890,16 @@ body {
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.camera-container.is-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
 }
 
 #camera {
@@ -834,6 +911,10 @@ body {
     max-height: 600px;
     object-fit: contain;
     display: block;
+}
+
+.camera-container.is-fullscreen #resultCanvas {
+    max-height: 100vh;
 }
 
 .camera-placeholder {
@@ -947,7 +1028,7 @@ body {
 
 
 /* =========================================================
-   DETECTION & PROXIMITY LISTS
+   DETECTION & PROXIMITY LISTS & FORMATTED PILLS
 ========================================================= */
 
 .detection-list,
@@ -975,12 +1056,28 @@ body {
     font-weight: 500;
 }
 
-.detection strong {
-    color: var(--blue-700);
+/* Formatted Detection Tag Types */
+.det-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0 6px 6px 0;
+    border: 1px solid transparent;
 }
 
+.det-tag-worker { background: var(--blue-50); color: var(--blue-700); border-color: var(--blue-200); }
+.det-tag-ppe-ok { background: var(--green-50); color: var(--green-700); border-color: var(--green-200); }
+.det-tag-ppe-missing { background: var(--red-50); color: var(--red-700); border-color: var(--red-200); }
+.det-tag-machine { background: var(--amber-50); color: var(--amber-700); border-color: var(--amber-200); }
+.det-tag-fire { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; font-weight: 700; }
+.det-tag-cone { background: var(--slate-100); color: var(--slate-700); border-color: var(--slate-300); }
+
 .item-badge {
-    padding: 8px 14px;
+    padding: 10px 16px;
     border-radius: var(--radius-md);
     font-size: 13px;
     display: flex;
@@ -1180,6 +1277,16 @@ body {
     color: var(--slate-600);
 }
 
+.alert-ack {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green-700);
+    background: var(--green-50);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--green-200);
+}
+
 .table-container {
     overflow-x: auto;
 }
@@ -1334,7 +1441,7 @@ body {
 
 
 /* =========================================================
-   LOADING & SPINNER STATES
+   LOADING & SKELETON SPINNER STATES
 ========================================================= */
 
 .loading-state, .empty-state {
@@ -1360,6 +1467,19 @@ body {
     to { transform: rotate(360deg); }
 }
 
+/* Skeleton Loading Shimmer */
+.skeleton {
+    background: linear-gradient(90deg, var(--slate-100) 25%, var(--slate-200) 50%, var(--slate-100) 75%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+}
+
+@keyframes skeletonShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
 
 /* =========================================================
    RESPONSIVE DESIGN
@@ -1380,4 +1500,5 @@ body {
     .content { padding: 20px 16px; }
     .risk-banner { flex-direction: column; align-items: flex-start; }
     .stats-grid { grid-template-columns: 1fr; }
+    .search-input { min-width: 120px; }
 }
