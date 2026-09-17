@@ -604,6 +604,12 @@ def api_ack_alert(alert_id: int):
     return {"success": ok, "id": alert_id}
 
 
+@app.post("/api/alerts/ack-all")
+def api_ack_all_alerts():
+    count = get_db().ack_all_alerts()
+    return {"success": True, "acknowledged_count": count}
+
+
 @app.get("/api/statistics")
 def api_statistics(range: str = "24h"):
     """Aggregate statistics for the Statistics tab."""
