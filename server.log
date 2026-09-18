@@ -1,24 +1,22 @@
 INFO:construction_safety:Loading hazard model...
-INFO:construction_safety:Hazard classes: {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane', 5: 'bus', 6: 'train', 7: 'truck', 8: 'boat', 9: 'traffic light', 10: 'fire hydrant', 11: 'stop sign', 12: 'parking meter', 13: 'bench', 14: 'bird', 15: 'cat', 16: 'dog', 17: 'horse', 18: 'sheep', 19: 'cow', 20: 'elephant', 21: 'bear', 22: 'zebra', 23: 'giraffe', 24: 'backpack', 25: 'umbrella', 26: 'handbag', 27: 'tie', 28: 'suitcase', 29: 'frisbee', 30: 'skis', 31: 'snowboard', 32: 'sports ball', 33: 'kite', 34: 'baseball bat', 35: 'baseball glove', 36: 'skateboard', 37: 'surfboard', 38: 'tennis racket', 39: 'bottle', 40: 'wine glass', 41: 'cup', 42: 'fork', 43: 'knife', 44: 'spoon', 45: 'bowl', 46: 'banana', 47: 'apple', 48: 'sandwich', 49: 'orange', 50: 'broccoli', 51: 'carrot', 52: 'hot dog', 53: 'pizza', 54: 'donut', 55: 'cake', 56: 'chair', 57: 'couch', 58: 'potted plant', 59: 'bed', 60: 'dining table', 61: 'toilet', 62: 'tv', 63: 'laptop', 64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone', 68: 'microwave', 69: 'oven', 70: 'toaster', 71: 'sink', 72: 'refrigerator', 73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier', 79: 'toothbrush'}
+INFO:construction_safety:Hazard classes: {0: 'Hardhat', 1: 'Mask', 2: 'NO-Hardhat', 3: 'NO-Mask', 4: 'NO-Safety Vest', 5: 'Person', 6: 'Safety Cone', 7: 'Safety Vest', 8: 'machinery', 9: 'utility pole', 10: 'vehicle'}
 INFO:construction_safety:Loading fire/smoke model...
-INFO:construction_safety:Fire/smoke classes: {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane', 5: 'bus', 6: 'train', 7: 'truck', 8: 'boat', 9: 'traffic light', 10: 'fire hydrant', 11: 'stop sign', 12: 'parking meter', 13: 'bench', 14: 'bird', 15: 'cat', 16: 'dog', 17: 'horse', 18: 'sheep', 19: 'cow', 20: 'elephant', 21: 'bear', 22: 'zebra', 23: 'giraffe', 24: 'backpack', 25: 'umbrella', 26: 'handbag', 27: 'tie', 28: 'suitcase', 29: 'frisbee', 30: 'skis', 31: 'snowboard', 32: 'sports ball', 33: 'kite', 34: 'baseball bat', 35: 'baseball glove', 36: 'skateboard', 37: 'surfboard', 38: 'tennis racket', 39: 'bottle', 40: 'wine glass', 41: 'cup', 42: 'fork', 43: 'knife', 44: 'spoon', 45: 'bowl', 46: 'banana', 47: 'apple', 48: 'sandwich', 49: 'orange', 50: 'broccoli', 51: 'carrot', 52: 'hot dog', 53: 'pizza', 54: 'donut', 55: 'cake', 56: 'chair', 57: 'couch', 58: 'potted plant', 59: 'bed', 60: 'dining table', 61: 'toilet', 62: 'tv', 63: 'laptop', 64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone', 68: 'microwave', 69: 'oven', 70: 'toaster', 71: 'sink', 72: 'refrigerator', 73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier', 79: 'toothbrush'}
+INFO:construction_safety:Fire/smoke classes: {0: 'Fire', 1: 'Smoke'}
 INFO:construction_safety:Models loaded successfully.
-INFO:     Started server process [13495]
+INFO:     Started server process [34379]
 INFO:     Waiting for application startup.
 INFO:construction_safety.storage:SQLite database ready at /app/data/safety.db
 INFO:construction_safety.alerting:Telegram alerting disabled (not configured)
 INFO:construction_safety:Observability ready: db=/app/data/safety.db evidence=/app/data/evidence telegram=off
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:59226 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49950 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49950 - "GET /style.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49960 - "GET /app.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49960 - "GET /api/alerts?limit=1&status=new HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33276 - "GET /api/alerts?limit=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33276 - "GET /api/events?limit=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33276 - "GET /api/statistics?range=24h HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49960 - "POST /safety/detect/image HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49960 - "GET /output/51dc6764-88b0-4278-8616-b1f07e9eff0f_annotated.jpg HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:49960 - "GET /api/evidence?limit=60 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49960 - "GET /api/alerts?limit=1&status=new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39912 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET /style.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49468 - "GET /app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET /api/alerts?limit=1&status=new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET /api/alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET /api/events?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET /api/statistics?range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET /api/evidence?limit=60 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET /api/reports?range=24h HTTP/1.1" 200 OK

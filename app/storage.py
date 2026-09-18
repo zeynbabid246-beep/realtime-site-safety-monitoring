@@ -221,6 +221,14 @@ class Database:
             self._conn.commit()
             return cur.rowcount > 0
 
+    def ack_all_alerts(self) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE alerts SET status = 'acknowledged' WHERE status = 'new'",
+            )
+            self._conn.commit()
+            return cur.rowcount
+
     def list_alerts(
         self,
         limit: int = 100,
