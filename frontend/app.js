@@ -48,6 +48,7 @@ const ctx = canvas.getContext("2d");
 
 const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
+const snapshotBtn = document.getElementById("snapshotBtn");
 const fpsCounter = document.getElementById("fpsCounter");
 
 const connectionStatus = document.getElementById("connectionStatus");
@@ -73,6 +74,8 @@ const detectionList = document.getElementById("detectionList");
 const alertBadge = document.getElementById("alertBadge");
 const alertBadgeCount = document.getElementById("alertBadgeCount");
 const navAlertBadge = document.getElementById("navAlertBadge");
+const ackAllHeaderBtn = document.getElementById("ackAllHeaderBtn");
+const ackAllAlertsBtn = document.getElementById("ackAllAlertsBtn");
 
 const cameraPlaceholder = document.getElementById("cameraPlaceholder");
 const pageTitle = document.getElementById("pageTitle");
@@ -103,6 +106,7 @@ let awaitingResponse = false;
 let activeTab = "dashboard";
 let pollTimer = null;
 let audioEnabled = true;
+let evidenceFilterMode = "all";
 
 // FPS Calculation
 let frameCount = 0;
@@ -338,18 +342,27 @@ function updateDetectionUI(summary, detections) {
             }
         }
 
-        // Proximity Breaches List
+        // Proximity Breaches List with Distance Meters
         if (proximityList) {
             const proxAlerts = summary.proximity_alerts || [];
             if (proxAlerts.length === 0) {
                 proximityList.innerHTML = '<div class="empty-state"><p>No proximity breaches detected</p></div>';
             } else {
-                proximityList.innerHTML = proxAlerts.map(p => `
-                    <div class="item-badge danger">
-                        <span>⚠️ Person ${p.person_id ?? 'Worker'} ↔ ${escapeHtml(p.machine_type || 'Machine')}</span>
-                        <strong>${Math.round(p.distance_px)}px</strong>
-                    </div>
-                `).join("");
+                proximityList.innerHTML = proxAlerts.map(p => {
+                    const dist = Math.round(p.distance_px);
+                    const pct = Math.min(100, Math.max(10, Math.round((250 - dist) / 2.5)));
+                    return `
+                        <div class="item-badge danger">
+                            <div class="badge-header-row">
+                                <span>⚠️ Person #${p.person_id ?? 'Worker'} ↔ ${escapeHtml(p.machine_type || 'Machinery')}</span>
+                                <strong>${dist} px</strong>
+                            </div>
+                            <div class="proximity-bar" title="Proximity Breach Meter">
+                                <div class="proximity-fill" style="width: ${pct}%;"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
             }
         }
 
@@ -357,11 +370,14 @@ function updateDetectionUI(summary, detections) {
         if (zoneList) {
             const zones = summary.danger_zones || [];
             if (zones.length === 0) {
-                zoneList.innerHTML = '<div class="empty-state"><p>No danger zone incursions</p></div>';
+                zoneList.innerHTML = '<div class="empty-state"><p>No active zone incursions</p></div>';
             } else {
                 zoneList.innerHTML = zones.map(z => `
                     <div class="item-badge danger">
-                        <span>🚨 Zone #${z.zone_id || 'Cone Cluster'} (${z.worker_count || 0} worker inside)</span>
+                        <div class="badge-header-row">
+                            <span>🚨 Danger Zone #${z.zone_id || 'Cone Cluster'} Incursion</span>
+                            <strong>${z.worker_count || 1} Worker Inside</strong>
+                        </div>
                     </div>
                 `).join("");
             }
@@ -373,7 +389,7 @@ function updateDetectionUI(summary, detections) {
         }
     }
 
-    // Bounding Box / Detections List
+    // Categorized Bounding Box Detections
     if (Array.isArray(detections) && detectionList) {
         if (detections.length === 0) {
             detectionList.innerHTML = `
@@ -382,10 +398,29 @@ function updateDetectionUI(summary, detections) {
                 </div>`;
         } else {
             detectionList.innerHTML = detections.map(d => {
+                const cls = (d.class || "").toLowerCase();
+                let badgeClass = "detection";
+                let prefix = "";
+
+                if (cls.includes("person") || cls.includes("worker")) {
+                    badgeClass += " worker-badge";
+                    prefix = "👷 ";
+                } else if (cls.includes("machine") || cls.includes("vehicle") || cls.includes("crane") || cls.includes("truck")) {
+                    badgeClass += " machine-badge";
+                    prefix = "🚜 ";
+                } else if (cls.startsWith("no-") || cls.includes("fire") || cls.includes("smoke")) {
+                    badgeClass += " violation-badge";
+                    prefix = "⚠️ ";
+                } else if (cls.includes("hardhat") || cls.includes("vest") || cls.includes("mask")) {
+                    prefix = "🦺 ";
+                } else if (cls.includes("cone")) {
+                    prefix = "🚧 ";
+                }
+
                 const trackStr = d.track_id != null ? `[ID:${d.track_id}]` : "";
                 return `
-                    <div class="detection">
-                        <strong>${escapeHtml(d.class)} ${trackStr}</strong> (${(d.confidence * 100).toFixed(1)}%)
+                    <div class="${badgeClass}">
+                        <span>${prefix}<strong>${escapeHtml(d.class)} ${trackStr}</strong> (${(d.confidence * 100).toFixed(1)}%)</span>
                     </div>
                 `;
             }).join("");
@@ -417,11 +452,26 @@ async function startCamera() {
         startButton.disabled = true;
         stopButton.disabled = false;
 
+        if (snapshotBtn) snapshotBtn.classList.remove("hidden");
+
     } catch (error) {
         console.error("Camera error:", error);
         cameraMessage.textContent = "Could not access the site camera.";
         showToast("Camera Error", "Camera access denied or unavailable", "HIGH");
     }
+}
+
+function takeSnapshot() {
+    if (!canvas) return;
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/jpeg", 0.9);
+    a.download = `safety_snapshot_${Date.now()}.jpg`;
+    a.click();
+    showToast("Snapshot Saved", "Captured instant live camera snapshot", "HIGH");
+}
+
+if (snapshotBtn) {
+    snapshotBtn.addEventListener("click", takeSnapshot);
 }
 
 function setConnectionState(state) {
@@ -542,6 +592,7 @@ function stopCamera() {
     startButton.disabled = false;
     stopButton.disabled = true;
 
+    if (snapshotBtn) snapshotBtn.classList.add("hidden");
     if (fpsCounter) fpsCounter.classList.add("hidden");
     cameraMessage.textContent = "Camera feed stopped.";
 
@@ -588,6 +639,7 @@ const imageResultContainer = document.getElementById("imageResultContainer");
 const imageOriginalPreview = document.getElementById("imageOriginalPreview");
 const imageAnnotatedPreview = document.getElementById("imageAnnotatedPreview");
 const imageSummaryCard = document.getElementById("imageSummaryCard");
+const imageHazardDetails = document.getElementById("imageHazardDetails");
 
 if (imageDropzone && imageFileInput) {
     imageDropzone.addEventListener("click", () => imageFileInput.click());
@@ -658,9 +710,22 @@ async function handleImageUpload(file) {
                 <div class="kv"><div class="k">Machinery Detected</div><div class="v">${summary.machine_count || 0}</div></div>
             </div>
             <div>
-                <strong>Violation Types:</strong> ${escapeHtml(violationSummary(summary.violation_counts))}
+                <strong>Violation Breakdown:</strong> ${escapeHtml(violationSummary(summary.violation_counts))}
             </div>
         `;
+
+        // Render Detailed Hazard Cards
+        if (imageHazardDetails) {
+            if (detections.length === 0) {
+                imageHazardDetails.innerHTML = '<div class="empty-state"><p>No objects or hazards detected in image</p></div>';
+            } else {
+                imageHazardDetails.innerHTML = detections.map(d => `
+                    <div class="detection">
+                        <strong>${escapeHtml(d.class)}</strong> (${(d.confidence * 100).toFixed(1)}%)
+                    </div>
+                `).join("");
+            }
+        }
 
         imageProcessingState.classList.add("hidden");
         imageResultContainer.classList.remove("hidden");
@@ -837,7 +902,7 @@ if (audioToggleBtn) {
 
 
 // ============================================================
-// ALERT BADGE & FEED
+// ALERT BADGE & BULK ACKNOWLEDGMENT
 // ============================================================
 
 async function loadAlertBadge() {
@@ -852,9 +917,11 @@ async function loadAlertBadge() {
         if (n > 0) {
             if (alertBadge) alertBadge.classList.remove("hidden");
             if (navAlertBadge) navAlertBadge.classList.remove("hidden");
+            if (ackAllHeaderBtn) ackAllHeaderBtn.classList.remove("hidden");
         } else {
             if (alertBadge) alertBadge.classList.add("hidden");
             if (navAlertBadge) navAlertBadge.classList.add("hidden");
+            if (ackAllHeaderBtn) ackAllHeaderBtn.classList.add("hidden");
         }
     } catch (err) {
         console.debug("Alert badge check failed:", err);
@@ -864,10 +931,14 @@ async function loadAlertBadge() {
 async function loadAlerts() {
     const list = document.getElementById("alertsList");
     const status = document.getElementById("alertStatusFilter").value;
-    const qs = status ? `?status=${encodeURIComponent(status)}&limit=100` : "?limit=100";
+    const levelFilter = document.getElementById("alertLevelFilter") ? document.getElementById("alertLevelFilter").value : "";
+
+    let params = new URLSearchParams({ limit: "100" });
+    if (status) params.set("status", status);
+    if (levelFilter) params.set("level", levelFilter);
 
     try {
-        const data = await getJson(`/api/alerts${qs}`);
+        const data = await getJson(`/api/alerts?${params.toString()}`);
         const alerts = data.alerts || [];
 
         if (alerts.length === 0) {
@@ -915,6 +986,23 @@ async function ackAlert(id) {
     }
 }
 
+async function ackAllAlerts() {
+    try {
+        const res = await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+        const data = await res.json();
+        if (data.success) {
+            showToast("Alerts Acknowledged", `Acknowledged ${data.count || 0} alert(s)`, "HIGH");
+            await Promise.all([loadAlerts(), loadAlertBadge()]);
+        }
+    } catch (err) {
+        console.error("Ack all failed:", err);
+        showToast("Error", "Failed to acknowledge alerts", "HIGH");
+    }
+}
+
+if (ackAllHeaderBtn) ackAllHeaderBtn.addEventListener("click", ackAllAlerts);
+if (ackAllAlertsBtn) ackAllAlertsBtn.addEventListener("click", ackAllAlerts);
+
 
 // ============================================================
 // HISTORY TAB
@@ -924,6 +1012,7 @@ async function loadHistory() {
     const body = document.getElementById("historyBody");
     const risk = document.getElementById("historyRiskFilter").value;
     const source = document.getElementById("historySourceFilter").value;
+    const query = document.getElementById("historySearchInput") ? document.getElementById("historySearchInput").value.toLowerCase().trim() : "";
 
     const params = new URLSearchParams({ limit: "200" });
     if (risk) params.set("risk", risk);
@@ -931,7 +1020,16 @@ async function loadHistory() {
 
     try {
         const data = await getJson(`/api/events?${params.toString()}`);
-        const events = data.events || [];
+        let events = data.events || [];
+
+        if (query) {
+            events = events.filter(e => {
+                const summaryStr = JSON.stringify(e.violation_counts || {}).toLowerCase();
+                const srcStr = (e.source || "").toLowerCase();
+                const riskStr = (e.risk_level || "").toLowerCase();
+                return summaryStr.includes(query) || srcStr.includes(query) || riskStr.includes(query);
+            });
+        }
 
         if (events.length === 0) {
             body.innerHTML = '<tr><td colspan="8"><div class="empty">No recorded safety events matching filters.</div></td></tr>';
@@ -957,8 +1055,8 @@ async function loadHistory() {
         }).join("");
 
         body.querySelectorAll("a[data-img], a[data-clip]").forEach(link => {
-            link.addEventListener("click", (e) => {
-                e.preventDefault();
+            link.addEventListener("click", (evt) => {
+                evt.preventDefault();
                 const img = link.dataset.img;
                 const clip = link.dataset.clip;
                 const id = link.dataset.id;
@@ -975,6 +1073,11 @@ async function loadHistory() {
     } catch (err) {
         body.innerHTML = `<tr><td colspan="8"><div class="empty">Could not load event history (${escapeHtml(err.message)}).</div></td></tr>`;
     }
+}
+
+const historySearchInput = document.getElementById("historySearchInput");
+if (historySearchInput) {
+    historySearchInput.addEventListener("input", loadHistory);
 }
 
 
@@ -1052,12 +1155,18 @@ async function loadEvidence() {
 
     try {
         const data = await getJson("/api/evidence?limit=60");
-        const items = data.evidence || [];
+        let items = data.evidence || [];
+
+        if (evidenceFilterMode === "images") {
+            items = items.filter(it => it.image && !it.clip);
+        } else if (evidenceFilterMode === "clips") {
+            items = items.filter(it => it.clip);
+        }
 
         if (items.length === 0) {
             gallery.innerHTML = `
                 <div class="empty-state" style="grid-column: 1/-1">
-                    <p>No evidence captured yet</p>
+                    <p>No evidence captured matching filter</p>
                     <span>High and critical risk safety violations automatically capture annotated evidence</span>
                 </div>`;
             return;
@@ -1105,6 +1214,32 @@ async function loadEvidence() {
     } catch (err) {
         gallery.innerHTML = `<div class="empty">Could not load evidence gallery (${escapeHtml(err.message)}).</div>`;
     }
+}
+
+// Evidence Filter Tabs
+const efAll = document.getElementById("evidenceFilterAll");
+const efImages = document.getElementById("evidenceFilterImages");
+const efClips = document.getElementById("evidenceFilterClips");
+
+if (efAll && efImages && efClips) {
+    efAll.addEventListener("click", () => {
+        evidenceFilterMode = "all";
+        [efAll, efImages, efClips].forEach(b => b.classList.remove("active"));
+        efAll.classList.add("active");
+        loadEvidence();
+    });
+    efImages.addEventListener("click", () => {
+        evidenceFilterMode = "images";
+        [efAll, efImages, efClips].forEach(b => b.classList.remove("active"));
+        efImages.classList.add("active");
+        loadEvidence();
+    });
+    efClips.addEventListener("click", () => {
+        evidenceFilterMode = "clips";
+        [efAll, efImages, efClips].forEach(b => b.classList.remove("active"));
+        efClips.classList.add("active");
+        loadEvidence();
+    });
 }
 
 
@@ -1209,6 +1344,9 @@ document.querySelector(".sidebar-nav").addEventListener("click", (e) => {
 
 document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);
 document.getElementById("alertStatusFilter").addEventListener("change", loadAlerts);
+if (document.getElementById("alertLevelFilter")) {
+    document.getElementById("alertLevelFilter").addEventListener("change", loadAlerts);
+}
 
 document.getElementById("refreshHistory").addEventListener("click", loadHistory);
 document.getElementById("historyRiskFilter").addEventListener("change", loadHistory);
