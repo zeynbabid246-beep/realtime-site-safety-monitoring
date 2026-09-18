@@ -494,6 +494,12 @@ body {
     color: var(--slate-500);
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .header-badge {
     position: relative;
     display: flex;
@@ -744,6 +750,12 @@ body {
     white-space: nowrap;
 }
 
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+}
+
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -788,6 +800,13 @@ body {
 .btn-outline:hover:not(:disabled) {
     background: var(--slate-50);
     border-color: var(--slate-400);
+}
+
+.btn-outline.active {
+    background: var(--blue-50);
+    color: var(--blue-700);
+    border-color: var(--blue-300);
+    font-weight: 700;
 }
 
 .select-input {
@@ -947,7 +966,7 @@ body {
 
 
 /* =========================================================
-   DETECTION & PROXIMITY LISTS
+   DETECTION & PROXIMITY LISTS WITH VISUAL DISTANCE METERS
 ========================================================= */
 
 .detection-list,
@@ -958,7 +977,7 @@ body {
 .detail-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
 .detection {
@@ -975,17 +994,35 @@ body {
     font-weight: 500;
 }
 
+.detection.worker-badge {
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+    color: #0369a1;
+}
+
+.detection.machine-badge {
+    background: #fef3c7;
+    border-color: #fde047;
+    color: #92400e;
+}
+
+.detection.violation-badge {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #991b1b;
+}
+
 .detection strong {
     color: var(--blue-700);
 }
 
 .item-badge {
-    padding: 8px 14px;
+    padding: 10px 16px;
     border-radius: var(--radius-md);
     font-size: 13px;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 6px;
     border: 1px solid var(--slate-200);
     background: var(--slate-50);
 }
@@ -994,7 +1031,29 @@ body {
     background: var(--red-50);
     border-color: var(--red-200);
     color: var(--red-700);
-    font-weight: 600;
+}
+
+.badge-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.proximity-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--slate-200);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 2px;
+}
+
+.proximity-fill {
+    height: 100%;
+    background: var(--red-600);
+    border-radius: 4px;
+    transition: width 0.3s ease;
 }
 
 
@@ -1178,6 +1237,16 @@ body {
 .alert-message {
     font-size: 13px;
     color: var(--slate-600);
+}
+
+.alert-ack {
+    font-size: 12px;
+    color: var(--green-700);
+    font-weight: 700;
+    background: var(--green-50);
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--green-100);
 }
 
 .table-container {

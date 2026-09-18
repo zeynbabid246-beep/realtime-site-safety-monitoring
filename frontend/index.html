@@ -148,6 +148,12 @@
             </div>
 
             <div class="header-actions">
+                <button type="button" class="btn btn-outline btn-sm hidden" id="ackAllHeaderBtn" title="Acknowledge all unacknowledged alerts">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M20 6L9 17l-5-5"/>
+                    </svg>
+                    Ack All Alerts
+                </button>
                 <button type="button" class="header-badge" id="alertBadge" title="Unacknowledged alerts feed" aria-label="Unacknowledged alerts feed">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -201,6 +207,13 @@
                         </div>
                         <div class="card-actions">
                             <span class="fps-badge hidden" id="fpsCounter">0 FPS</span>
+                            <button id="snapshotBtn" class="btn btn-secondary hidden" aria-label="Take instant stream snapshot">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                    <circle cx="12" cy="13" r="4"/>
+                                </svg>
+                                Snapshot
+                            </button>
                             <button id="startButton" class="btn btn-primary" aria-label="Start live webcam detection">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                     <polygon points="5 3 19 12 5 21 5 3"/>
@@ -324,12 +337,12 @@
                     </div>
                 </div>
 
-                <!-- Current Frame Bounding Box Detections -->
+                <!-- Categorized Bounding Box Detections -->
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title-group">
-                            <h3>Current Frame Detections & Tracking</h3>
-                            <p>Live object classifications with confidence and persistent tracking IDs</p>
+                            <h3>Current Frame Detections & ByteTrack IDs</h3>
+                            <p>Live object classifications, persistent tracking IDs, and PPE compliance status</p>
                         </div>
                     </div>
                     <div id="detectionList" class="detection-list">
@@ -394,6 +407,14 @@
                                 </div>
                                 <div class="result-summary-card" id="imageSummaryCard">
                                     <!-- Populated by app.js -->
+                                </div>
+                                <div class="card" style="margin-top: 16px;">
+                                    <div class="card-header">
+                                        <h4>Detailed Hazard & Entity Breakdown</h4>
+                                    </div>
+                                    <div id="imageHazardDetails" class="detection-list">
+                                        <!-- Populated by app.js -->
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -467,6 +488,21 @@
                                 <option value="new">New / Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+
+                            <label for="alertLevelFilter" class="sr-only">Filter alert level</label>
+                            <select id="alertLevelFilter" class="select-input">
+                                <option value="">All severity levels</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                                <option value="HIGH">HIGH</option>
+                            </select>
+
+                            <button id="ackAllAlertsBtn" class="btn btn-outline" aria-label="Acknowledge all alerts">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M20 6L9 17l-5-5"/>
+                                </svg>
+                                Acknowledge All
+                            </button>
+
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -494,6 +530,8 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                            <input type="search" id="historySearchInput" placeholder="Search violations..." class="select-input" aria-label="Search event history" style="min-width: 180px;">
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
                                 <option value="">All risk levels</option>
@@ -613,6 +651,9 @@
                             <p>Automated JPEG snapshots and rolling MP4 clips captured during HIGH/CRITICAL events</p>
                         </div>
                         <div class="card-actions">
+                            <button id="evidenceFilterAll" class="btn btn-outline active">All Evidence</button>
+                            <button id="evidenceFilterImages" class="btn btn-outline">Snapshots</button>
+                            <button id="evidenceFilterClips" class="btn btn-outline">Video Clips</button>
                             <button id="refreshEvidence" class="btn btn-secondary" aria-label="Refresh evidence gallery">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
