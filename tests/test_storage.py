@@ -95,3 +95,13 @@ def test_ack_alert_and_counts(db):
     assert db.ack_alert(aid) is False
     assert db.count_alerts("new") == 0
     assert db.count_alerts("acknowledged") == 1
+
+
+def test_ack_all_alerts(db):
+    db.insert_alert({"ts": time.time(), "level": "HIGH", "title": "T1", "message": "M1", "status": "new"})
+    db.insert_alert({"ts": time.time(), "level": "CRITICAL", "title": "T2", "message": "M2", "status": "new"})
+    assert db.count_alerts("new") == 2
+    count = db.ack_all_alerts()
+    assert count == 2
+    assert db.count_alerts("new") == 0
+    assert db.count_alerts("acknowledged") == 2
