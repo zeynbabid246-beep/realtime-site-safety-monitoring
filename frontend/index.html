@@ -134,7 +134,7 @@
     <div class="main-wrapper">
         <!-- Top Header Bar -->
         <header class="top-header">
-            <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle navigation menu">
+            <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="sidebar">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <line x1="3" y1="12" x2="21" y2="12"/>
                     <line x1="3" y1="6" x2="21" y2="6"/>
@@ -328,8 +328,8 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title-group">
-                            <h3>Current Frame Detections & Tracking</h3>
-                            <p>Live object classifications with confidence and persistent tracking IDs</p>
+                            <h3>Current Frame Detections & Categorized Breakdown</h3>
+                            <p>Live object classifications with confidence, tracked IDs, and hazard flags</p>
                         </div>
                     </div>
                     <div id="detectionList" class="detection-list">
@@ -361,6 +361,15 @@
                                 <h3>Image Hazard Detection</h3>
                                 <p>Upload job site photos to inspect PPE compliance, danger zones, and equipment proximity</p>
                             </div>
+                            <div class="card-actions">
+                                <button id="clearImageBtn" class="btn btn-outline hidden" aria-label="Clear current image">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                    Upload New Photo
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="dropzone" id="imageDropzone">
@@ -378,7 +387,12 @@
 
                             <div id="imageProcessingState" class="processing-state hidden">
                                 <div class="spinner"></div>
-                                <p>Processing image through Safety AI Pipeline...</p>
+                                <p>Processing image through AI Safety Pipeline...</p>
+                                <div class="progress-steps">
+                                    <span class="step-badge active">1. Neural Inference</span>
+                                    <span class="step-badge active">2. PPE Association</span>
+                                    <span class="step-badge active">3. Spatial Calculations</span>
+                                </div>
                             </div>
 
                             <div id="imageResultContainer" class="result-container hidden">
@@ -408,6 +422,15 @@
                                 <h3>Offline Video Safety Analysis</h3>
                                 <p>Process full CCTV or drone footage through multi-model YOLO detection and ByteTrack tracking</p>
                             </div>
+                            <div class="card-actions">
+                                <button id="clearVideoBtn" class="btn btn-outline hidden" aria-label="Clear current video">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                    Upload New Video
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="dropzone" id="videoDropzone">
@@ -424,8 +447,8 @@
 
                             <div id="videoProcessingState" class="processing-state hidden">
                                 <div class="spinner"></div>
-                                <p>Analyzing video frames, evaluating danger zones, and rendering bounding overlays...</p>
-                                <span class="processing-hint">This may take a moment depending on video length.</span>
+                                <p>Analyzing video frames, tracking objects, and rendering overlays...</p>
+                                <span class="processing-hint">Multi-model tracking in progress. Please wait...</span>
                             </div>
 
                             <div id="videoResultContainer" class="result-container hidden">
@@ -461,12 +484,20 @@
                             <p>HIGH and CRITICAL safety violations requiring immediate safety officer acknowledgment</p>
                         </div>
                         <div class="card-actions">
+                            <button id="ackAllAlertsBtn" class="btn btn-primary" aria-label="Acknowledge all unacknowledged alerts">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                Acknowledge All
+                            </button>
+
                             <label for="alertStatusFilter" class="sr-only">Filter alert status</label>
                             <select id="alertStatusFilter" class="select-input">
                                 <option value="">All statuses</option>
                                 <option value="new">New / Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -494,6 +525,10 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                            <div class="search-input-wrapper">
+                                <input type="text" id="historySearchInput" class="search-input" placeholder="Search events..." aria-label="Search event history">
+                            </div>
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
                                 <option value="">All risk levels</option>
@@ -613,6 +648,17 @@
                             <p>Automated JPEG snapshots and rolling MP4 clips captured during HIGH/CRITICAL events</p>
                         </div>
                         <div class="card-actions">
+                            <div class="search-input-wrapper">
+                                <input type="text" id="evidenceSearchInput" class="search-input" placeholder="Search evidence..." aria-label="Search evidence gallery">
+                            </div>
+
+                            <label for="evidenceTypeFilter" class="sr-only">Filter media type</label>
+                            <select id="evidenceTypeFilter" class="select-input">
+                                <option value="">All media types</option>
+                                <option value="image">Snapshots only</option>
+                                <option value="clip">Video clips only</option>
+                            </select>
+
                             <button id="refreshEvidence" class="btn btn-secondary" aria-label="Refresh evidence gallery">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
