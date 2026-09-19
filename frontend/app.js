@@ -249,6 +249,11 @@ if (lightboxModal) {
     lightboxModal.addEventListener("click", (e) => {
         if (e.target === lightboxModal) closeLightbox();
     });
+    window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !lightboxModal.classList.contains("hidden")) {
+            closeLightbox();
+        }
+    });
 }
 
 
@@ -915,6 +920,19 @@ async function ackAlert(id) {
     }
 }
 
+async function ackAllAlerts() {
+    try {
+        const res = await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+        if (res.ok) {
+            const data = await res.json();
+            showToast("Alerts Acknowledged", `Acknowledged ${data.acknowledged_count || 0} alert(s)`, "SAFE");
+            await Promise.all([loadAlerts(), loadAlertBadge()]);
+        }
+    } catch (err) {
+        console.error("Ack all failed:", err);
+    }
+}
+
 
 // ============================================================
 // HISTORY TAB
@@ -1206,6 +1224,11 @@ document.querySelector(".sidebar-nav").addEventListener("click", (e) => {
     const btn = e.target.closest(".nav-item");
     if (btn) switchTab(btn.dataset.tab);
 });
+
+const ackAllBtn = document.getElementById("ackAllAlerts");
+if (ackAllBtn) {
+    ackAllBtn.addEventListener("click", ackAllAlerts);
+}
 
 document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);
 document.getElementById("alertStatusFilter").addEventListener("change", loadAlerts);
