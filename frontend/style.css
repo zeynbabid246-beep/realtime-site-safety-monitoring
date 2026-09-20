@@ -103,10 +103,30 @@ body {
     top: 10px;
 }
 
+/* Custom Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--slate-100);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--slate-300);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--slate-400);
+}
+
 /* Focus Visible outline standard */
 :focus-visible {
     outline: 2px solid var(--blue-600);
     outline-offset: 2px;
+    border-radius: var(--radius-sm);
 }
 
 .sr-only {
@@ -758,6 +778,11 @@ body {
 .btn-primary:hover:not(:disabled) {
     background: var(--blue-700);
     box-shadow: 0 4px 12px rgba(2, 106, 167, 0.35);
+    transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+    transform: translateY(0);
 }
 
 .btn-danger {
@@ -786,8 +811,15 @@ body {
 }
 
 .btn-outline:hover:not(:disabled) {
-    background: var(--slate-50);
-    border-color: var(--slate-400);
+    background: var(--blue-50);
+    border-color: var(--blue-400);
+    color: var(--blue-700);
+    transform: translateY(-1px);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--slate-200);
+    transform: translateY(-1px);
 }
 
 .select-input {
@@ -1145,7 +1177,13 @@ body {
     align-items: center;
     gap: 16px;
     background: white;
-    transition: background var(--transition);
+    transition: all var(--transition);
+    box-shadow: var(--shadow-sm);
+}
+
+.alert-item:hover {
+    background: var(--slate-50);
+    box-shadow: var(--shadow-md);
 }
 
 .alert-item:hover {

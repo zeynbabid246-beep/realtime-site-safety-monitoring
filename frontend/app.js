@@ -251,6 +251,12 @@ if (lightboxModal) {
     });
 }
 
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && lightboxModal && !lightboxModal.classList.contains("hidden")) {
+        closeLightbox();
+    }
+});
+
 
 // ============================================================
 // UI UPDATE HELPERS (Live Camera HUD & Metrics)
@@ -910,8 +916,27 @@ async function ackAlert(id) {
     try {
         await fetch(apiUrl(`/api/alerts/${id}/ack`), { method: "POST" });
         await Promise.all([loadAlerts(), loadAlertBadge()]);
+        showToast("Alert Acknowledged", `Alert #${id} has been acknowledged.`, "HIGH");
     } catch (err) {
         console.error("Ack failed:", err);
+        showToast("Action Failed", "Failed to acknowledge alert.", "HIGH");
+    }
+}
+
+async function ackAllAlerts() {
+    const ackBtn = document.getElementById("ackAllAlerts");
+    if (ackBtn) ackBtn.disabled = true;
+    try {
+        const res = await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        await Promise.all([loadAlerts(), loadAlertBadge()]);
+        showToast("All Alerts Acknowledged", `Bulk acknowledged ${data.count || 0} alert(s).`, "HIGH");
+    } catch (err) {
+        console.error("Ack-all failed:", err);
+        showToast("Action Failed", "Failed to acknowledge all alerts.", "HIGH");
+    } finally {
+        if (ackBtn) ackBtn.disabled = false;
     }
 }
 
@@ -1209,6 +1234,8 @@ document.querySelector(".sidebar-nav").addEventListener("click", (e) => {
 
 document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);
 document.getElementById("alertStatusFilter").addEventListener("change", loadAlerts);
+const ackAllBtn = document.getElementById("ackAllAlerts");
+if (ackAllBtn) ackAllBtn.addEventListener("click", ackAllAlerts);
 
 document.getElementById("refreshHistory").addEventListener("click", loadHistory);
 document.getElementById("historyRiskFilter").addEventListener("change", loadHistory);
