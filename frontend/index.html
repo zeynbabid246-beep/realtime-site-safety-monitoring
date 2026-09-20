@@ -331,6 +331,16 @@
                             <h3>Current Frame Detections & Tracking</h3>
                             <p>Live object classifications with confidence and persistent tracking IDs</p>
                         </div>
+                        <div class="card-actions">
+                            <label for="detectionCategoryFilter" class="sr-only">Filter detections by category</label>
+                            <select id="detectionCategoryFilter" class="select-input">
+                                <option value="all">All Categories</option>
+                                <option value="person">Workers / Persons</option>
+                                <option value="machinery">Heavy Machinery & Vehicles</option>
+                                <option value="hazard">Safety Hazards & PPE</option>
+                                <option value="fire">Fire & Smoke</option>
+                            </select>
+                        </div>
                     </div>
                     <div id="detectionList" class="detection-list">
                         <div class="empty-state">
@@ -395,6 +405,15 @@
                                 <div class="result-summary-card" id="imageSummaryCard">
                                     <!-- Populated by app.js -->
                                 </div>
+                                <div class="media-actions-bar">
+                                    <button type="button" id="resetImageBtn" class="btn btn-secondary">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <polyline points="1 4 1 10 7 10"/>
+                                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                                        </svg>
+                                        Analyze Another Image
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -442,6 +461,13 @@
                                         </svg>
                                         Download Annotated Video
                                     </a>
+                                    <button type="button" id="resetVideoBtn" class="btn btn-secondary">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <polyline points="1 4 1 10 7 10"/>
+                                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                                        </svg>
+                                        Analyze Another Video
+                                    </button>
                                 </div>
                                 <div class="result-summary-card" id="videoSummaryCard">
                                     <!-- Populated by app.js -->
@@ -467,6 +493,12 @@
                                 <option value="new">New / Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+                            <button id="ackAllAlertsBtn" class="btn btn-outline" aria-label="Acknowledge all alerts">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                Acknowledge All
+                            </button>
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -510,6 +542,8 @@
                                 <option value="video">Video</option>
                                 <option value="image">Image</option>
                             </select>
+
+                            <input type="search" id="historySearchInput" class="search-input" placeholder="Search violation or source..." aria-label="Search history events">
 
                             <button id="refreshHistory" class="btn btn-secondary" aria-label="Refresh event history">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -613,6 +647,11 @@
                             <p>Automated JPEG snapshots and rolling MP4 clips captured during HIGH/CRITICAL events</p>
                         </div>
                         <div class="card-actions">
+                            <select id="evidenceTypeFilter" class="select-input" aria-label="Filter evidence media type">
+                                <option value="all">All Media</option>
+                                <option value="clip">Video Clips Only</option>
+                                <option value="image">Snapshots Only</option>
+                            </select>
                             <button id="refreshEvidence" class="btn btn-secondary" aria-label="Refresh evidence gallery">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
