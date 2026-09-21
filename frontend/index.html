@@ -148,6 +148,14 @@
             </div>
 
             <div class="header-actions">
+                <div class="header-status-group">
+                    <div class="site-status-pill" id="siteStatusPill">
+                        <span class="status-pulse"></span>
+                        <span id="siteStatusText">SITE ACTIVE</span>
+                    </div>
+                    <div class="clock-display" id="headerClock">--:--:--</div>
+                </div>
+
                 <button type="button" class="header-badge" id="alertBadge" title="Unacknowledged alerts feed" aria-label="Unacknowledged alerts feed">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -467,6 +475,12 @@
                                 <option value="new">New / Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+                        <button id="ackAllAlertsBtn" class="btn btn-secondary" aria-label="Acknowledge all alerts">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            Ack All
+                        </button>
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -494,6 +508,10 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                        <div class="search-box">
+                            <input type="text" id="historySearchInput" placeholder="Search events..." class="text-input" aria-label="Search event history">
+                        </div>
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
                                 <option value="">All risk levels</option>
