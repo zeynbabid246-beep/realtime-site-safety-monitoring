@@ -109,6 +109,12 @@ body {
     outline-offset: 2px;
 }
 
+button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible {
+    outline: 2px solid var(--blue-600);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(12, 135, 235, 0.25);
+}
+
 .sr-only {
     position: absolute;
     width: 1px;
