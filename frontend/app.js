@@ -73,6 +73,7 @@ const detectionList = document.getElementById("detectionList");
 const alertBadge = document.getElementById("alertBadge");
 const alertBadgeCount = document.getElementById("alertBadgeCount");
 const navAlertBadge = document.getElementById("navAlertBadge");
+const ackAllAlertsBtn = document.getElementById("ackAllAlertsBtn");
 
 const cameraPlaceholder = document.getElementById("cameraPlaceholder");
 const pageTitle = document.getElementById("pageTitle");
@@ -915,6 +916,19 @@ async function ackAlert(id) {
     }
 }
 
+async function ackAllAlerts() {
+    try {
+        const res = await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        showToast("Alerts Acknowledged", `Acknowledged ${data.acknowledged_count || 0} alert(s)`, "HIGH");
+        await Promise.all([loadAlerts(), loadAlertBadge()]);
+    } catch (err) {
+        console.error("Ack all failed:", err);
+        showToast("Error", "Failed to acknowledge all alerts", "HIGH");
+    }
+}
+
 
 // ============================================================
 // HISTORY TAB
@@ -1202,9 +1216,41 @@ if (alertBadge) {
     alertBadge.addEventListener("click", () => switchTab("alerts"));
 }
 
-document.querySelector(".sidebar-nav").addEventListener("click", (e) => {
+if (ackAllAlertsBtn) {
+    ackAllAlertsBtn.addEventListener("click", ackAllAlerts);
+}
+
+const navTabsContainer = document.querySelector(".sidebar-nav");
+navTabsContainer.addEventListener("click", (e) => {
     const btn = e.target.closest(".nav-item");
     if (btn) switchTab(btn.dataset.tab);
+});
+
+// Keyboard arrow navigation on tablist
+navTabsContainer.addEventListener("keydown", (e) => {
+    const tabs = Array.from(navTabsContainer.querySelectorAll(".nav-item"));
+    const current = document.activeElement;
+    const idx = tabs.indexOf(current);
+    if (idx === -1) return;
+
+    if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const next = tabs[(idx + 1) % tabs.length];
+        next.focus();
+        switchTab(next.dataset.tab);
+    } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        const prev = tabs[(idx - 1 + tabs.length) % tabs.length];
+        prev.focus();
+        switchTab(prev.dataset.tab);
+    }
+});
+
+// Escape key listener for closing lightbox modal
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !lightboxModal.classList.contains("hidden")) {
+        closeLightbox();
+    }
 });
 
 document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);

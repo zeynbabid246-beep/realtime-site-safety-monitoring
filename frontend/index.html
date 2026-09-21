@@ -467,6 +467,12 @@
                                 <option value="new">New / Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+                            <button id="ackAllAlertsBtn" class="btn btn-primary" aria-label="Acknowledge all unacknowledged alerts">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                Ack All
+                            </button>
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -476,7 +482,7 @@
                             </button>
                         </div>
                     </div>
-                    <div id="alertsList" class="alert-list">
+                    <div id="alertsList" class="alert-list" aria-live="polite">
                         <div class="loading-state">
                             <div class="spinner"></div>
                             <p>Loading active alerts...</p>
