@@ -73,6 +73,10 @@ const detectionList = document.getElementById("detectionList");
 const alertBadge = document.getElementById("alertBadge");
 const alertBadgeCount = document.getElementById("alertBadgeCount");
 const navAlertBadge = document.getElementById("navAlertBadge");
+const ackAllAlertsBtn = document.getElementById("ackAllAlertsBtn");
+
+const headerClock = document.getElementById("headerClock");
+const historySearchInput = document.getElementById("historySearchInput");
 
 const cameraPlaceholder = document.getElementById("cameraPlaceholder");
 const pageTitle = document.getElementById("pageTitle");
@@ -423,6 +427,14 @@ async function startCamera() {
         showToast("Camera Error", "Camera access denied or unavailable", "HIGH");
     }
 }
+
+function updateHeaderClock() {
+    if (!headerClock) return;
+    const now = new Date();
+    headerClock.textContent = now.toLocaleTimeString();
+}
+setInterval(updateHeaderClock, 1000);
+updateHeaderClock();
 
 function setConnectionState(state) {
     if (!connectionStatus) return;
@@ -915,6 +927,23 @@ async function ackAlert(id) {
     }
 }
 
+async function ackAllAlerts() {
+    try {
+        const res = await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        showToast("Alerts Acknowledged", `Bulk acknowledged ${data.acknowledged_count || 0} alert(s)`, "SAFE");
+        await Promise.all([loadAlerts(), loadAlertBadge()]);
+    } catch (err) {
+        console.error("Ack all failed:", err);
+        showToast("Error", "Failed to acknowledge alerts", "HIGH");
+    }
+}
+
+if (ackAllAlertsBtn) {
+    ackAllAlertsBtn.addEventListener("click", ackAllAlerts);
+}
+
 
 // ============================================================
 // HISTORY TAB
@@ -924,6 +953,7 @@ async function loadHistory() {
     const body = document.getElementById("historyBody");
     const risk = document.getElementById("historyRiskFilter").value;
     const source = document.getElementById("historySourceFilter").value;
+    const search = (historySearchInput ? historySearchInput.value : "").trim().toLowerCase();
 
     const params = new URLSearchParams({ limit: "200" });
     if (risk) params.set("risk", risk);
@@ -931,7 +961,14 @@ async function loadHistory() {
 
     try {
         const data = await getJson(`/api/events?${params.toString()}`);
-        const events = data.events || [];
+        let events = data.events || [];
+
+        if (search) {
+            events = events.filter(e => {
+                const str = `${e.id} ${e.source} ${e.risk_level} ${JSON.stringify(e.violation_counts)}`.toLowerCase();
+                return str.includes(search);
+            });
+        }
 
         if (events.length === 0) {
             body.innerHTML = '<tr><td colspan="8"><div class="empty">No recorded safety events matching filters.</div></td></tr>';
@@ -975,6 +1012,10 @@ async function loadHistory() {
     } catch (err) {
         body.innerHTML = `<tr><td colspan="8"><div class="empty">Could not load event history (${escapeHtml(err.message)}).</div></td></tr>`;
     }
+}
+
+if (historySearchInput) {
+    historySearchInput.addEventListener("input", loadHistory);
 }
 
 
