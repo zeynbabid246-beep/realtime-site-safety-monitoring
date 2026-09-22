@@ -103,6 +103,7 @@ let awaitingResponse = false;
 let activeTab = "dashboard";
 let pollTimer = null;
 let audioEnabled = true;
+let historySearchTerm = "";
 
 // FPS Calculation
 let frameCount = 0;
@@ -910,8 +911,22 @@ async function ackAlert(id) {
     try {
         await fetch(apiUrl(`/api/alerts/${id}/ack`), { method: "POST" });
         await Promise.all([loadAlerts(), loadAlertBadge()]);
+        showToast("Alert Acknowledged", `Alert #${id} has been acknowledged.`, "SAFE");
     } catch (err) {
         console.error("Ack failed:", err);
+        showToast("Action Failed", "Could not acknowledge alert", "HIGH");
+    }
+}
+
+async function ackAllAlerts() {
+    try {
+        const res = await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+        const data = await res.json();
+        await Promise.all([loadAlerts(), loadAlertBadge()]);
+        showToast("Alerts Acknowledged", `Acknowledged ${data.acknowledged_count || 0} alert(s).`, "SAFE");
+    } catch (err) {
+        console.error("Ack all failed:", err);
+        showToast("Action Failed", "Could not acknowledge all alerts", "HIGH");
     }
 }
 
@@ -931,10 +946,20 @@ async function loadHistory() {
 
     try {
         const data = await getJson(`/api/events?${params.toString()}`);
-        const events = data.events || [];
+        let events = data.events || [];
+
+        if (historySearchTerm && historySearchTerm.trim() !== "") {
+            const term = historySearchTerm.trim().toLowerCase();
+            events = events.filter(e => {
+                const summaryStr = JSON.stringify(e.violation_counts || {}).toLowerCase();
+                const sourceStr = (e.source || "").toLowerCase();
+                const riskStr = (e.risk_level || "").toLowerCase();
+                return summaryStr.includes(term) || sourceStr.includes(term) || riskStr.includes(term);
+            });
+        }
 
         if (events.length === 0) {
-            body.innerHTML = '<tr><td colspan="8"><div class="empty">No recorded safety events matching filters.</div></td></tr>';
+            body.innerHTML = '<tr><td colspan="8"><div class="empty-state"><p>No recorded safety events matching filters.</p></div></td></tr>';
             return;
         }
 
@@ -1209,10 +1234,27 @@ document.querySelector(".sidebar-nav").addEventListener("click", (e) => {
 
 document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);
 document.getElementById("alertStatusFilter").addEventListener("change", loadAlerts);
+const ackAllAlertsBtn = document.getElementById("ackAllAlertsBtn");
+if (ackAllAlertsBtn) {
+    ackAllAlertsBtn.addEventListener("click", ackAllAlerts);
+}
 
 document.getElementById("refreshHistory").addEventListener("click", loadHistory);
 document.getElementById("historyRiskFilter").addEventListener("change", loadHistory);
 document.getElementById("historySourceFilter").addEventListener("change", loadHistory);
+const historySearchInput = document.getElementById("historySearchInput");
+if (historySearchInput) {
+    historySearchInput.addEventListener("input", (e) => {
+        historySearchTerm = e.target.value;
+        loadHistory();
+    });
+}
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && lightboxModal && !lightboxModal.classList.contains("hidden")) {
+        closeLightbox();
+    }
+});
 
 document.getElementById("refreshStats").addEventListener("click", loadStatistics);
 document.getElementById("statsRange").addEventListener("change", loadStatistics);
