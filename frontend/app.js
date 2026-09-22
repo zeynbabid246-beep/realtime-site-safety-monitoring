@@ -65,6 +65,7 @@ const ppeStatus = document.getElementById("ppeStatus");
 const fireStatus = document.getElementById("fireStatus");
 const smokeStatus = document.getElementById("smokeStatus");
 const personStatus = document.getElementById("personStatus");
+const machineStatus = document.getElementById("machineStatus");
 
 const proximityList = document.getElementById("proximityList");
 const zoneList = document.getElementById("zoneList");
@@ -250,6 +251,11 @@ if (lightboxModal) {
         if (e.target === lightboxModal) closeLightbox();
     });
 }
+window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && lightboxModal && !lightboxModal.classList.contains("hidden")) {
+        closeLightbox();
+    }
+});
 
 
 // ============================================================
@@ -335,6 +341,17 @@ function updateDetectionUI(summary, detections) {
             } else {
                 personStatus.textContent = "None";
                 personStatus.style.color = "#64748b";
+            }
+        }
+
+        // Heavy Machinery Card Status
+        if (machineStatus) {
+            if (summary.machine_count > 0) {
+                machineStatus.textContent = `${summary.machine_count} Active Unit(s)`;
+                machineStatus.style.color = "#035588";
+            } else {
+                machineStatus.textContent = "None";
+                machineStatus.style.color = "#64748b";
             }
         }
 
@@ -553,6 +570,10 @@ function stopCamera() {
     smokeStatus.style.color = "";
     personStatus.textContent = "None";
     personStatus.style.color = "";
+    if (machineStatus) {
+        machineStatus.textContent = "None";
+        machineStatus.style.color = "";
+    }
 
     if (riskBadge) {
         const valueEl = riskBadge.querySelector(".risk-value");
@@ -915,6 +936,18 @@ async function ackAlert(id) {
     }
 }
 
+async function ackAllAlerts() {
+    try {
+        const res = await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+        const data = await res.json();
+        showToast("Alerts Acknowledged", `Acknowledged ${data.acknowledged_count || 0} alert(s)`, "HIGH");
+        await Promise.all([loadAlerts(), loadAlertBadge()]);
+    } catch (err) {
+        console.error("Ack all failed:", err);
+        showToast("Error", "Failed to acknowledge alerts", "HIGH");
+    }
+}
+
 
 // ============================================================
 // HISTORY TAB
@@ -924,6 +957,7 @@ async function loadHistory() {
     const body = document.getElementById("historyBody");
     const risk = document.getElementById("historyRiskFilter").value;
     const source = document.getElementById("historySourceFilter").value;
+    const searchQuery = (document.getElementById("historySearchInput")?.value || "").toLowerCase().trim();
 
     const params = new URLSearchParams({ limit: "200" });
     if (risk) params.set("risk", risk);
@@ -931,10 +965,19 @@ async function loadHistory() {
 
     try {
         const data = await getJson(`/api/events?${params.toString()}`);
-        const events = data.events || [];
+        let events = data.events || [];
+
+        if (searchQuery) {
+            events = events.filter(e => {
+                const violationsText = violationSummary(e.violation_counts).toLowerCase();
+                const idText = String(e.id || "");
+                const sourceText = String(e.source || "").toLowerCase();
+                return violationsText.includes(searchQuery) || idText.includes(searchQuery) || sourceText.includes(searchQuery);
+            });
+        }
 
         if (events.length === 0) {
-            body.innerHTML = '<tr><td colspan="8"><div class="empty">No recorded safety events matching filters.</div></td></tr>';
+            body.innerHTML = '<tr><td colspan="8"><div class="empty-state"><p>No recorded safety events matching filters</p></div></td></tr>';
             return;
         }
 
@@ -1049,15 +1092,22 @@ async function loadStatistics() {
 
 async function loadEvidence() {
     const gallery = document.getElementById("evidenceGallery");
+    const filterType = document.getElementById("evidenceTypeFilter")?.value || "all";
 
     try {
         const data = await getJson("/api/evidence?limit=60");
-        const items = data.evidence || [];
+        let items = data.evidence || [];
+
+        if (filterType === "snapshots") {
+            items = items.filter(it => it.image && !it.clip);
+        } else if (filterType === "clips") {
+            items = items.filter(it => it.clip);
+        }
 
         if (items.length === 0) {
             gallery.innerHTML = `
                 <div class="empty-state" style="grid-column: 1/-1">
-                    <p>No evidence captured yet</p>
+                    <p>No evidence captured matching filter</p>
                     <span>High and critical risk safety violations automatically capture annotated evidence</span>
                 </div>`;
             return;
@@ -1207,6 +1257,9 @@ document.querySelector(".sidebar-nav").addEventListener("click", (e) => {
     if (btn) switchTab(btn.dataset.tab);
 });
 
+const ackAllBtn = document.getElementById("ackAllAlertsBtn");
+if (ackAllBtn) ackAllBtn.addEventListener("click", ackAllAlerts);
+
 document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);
 document.getElementById("alertStatusFilter").addEventListener("change", loadAlerts);
 
@@ -1214,8 +1267,18 @@ document.getElementById("refreshHistory").addEventListener("click", loadHistory)
 document.getElementById("historyRiskFilter").addEventListener("change", loadHistory);
 document.getElementById("historySourceFilter").addEventListener("change", loadHistory);
 
+const historySearchInput = document.getElementById("historySearchInput");
+if (historySearchInput) {
+    historySearchInput.addEventListener("input", loadHistory);
+}
+
 document.getElementById("refreshStats").addEventListener("click", loadStatistics);
 document.getElementById("statsRange").addEventListener("change", loadStatistics);
+
+const evidenceTypeFilter = document.getElementById("evidenceTypeFilter");
+if (evidenceTypeFilter) {
+    evidenceTypeFilter.addEventListener("change", loadEvidence);
+}
 
 document.getElementById("refreshEvidence").addEventListener("click", loadEvidence);
 

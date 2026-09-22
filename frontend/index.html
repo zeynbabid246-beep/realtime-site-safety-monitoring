@@ -291,6 +291,21 @@
                             <span class="stat-value" id="personStatus">None</span>
                         </div>
                     </div>
+
+                    <div class="stat-card" id="machineCard">
+                        <div class="stat-icon machine-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+                                <circle cx="5.5" cy="18.5" r="2.5"/>
+                                <circle cx="18.5" cy="18.5" r="2.5"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Heavy Machinery</span>
+                            <span class="stat-value" id="machineStatus">None</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Ground Proximity & Danger Zone Grid -->
@@ -467,6 +482,12 @@
                                 <option value="new">New / Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+                            <button id="ackAllAlertsBtn" class="btn btn-outline" aria-label="Acknowledge all alerts">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                Ack All
+                            </button>
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -494,6 +515,10 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                            <div class="search-box">
+                                <input type="text" id="historySearchInput" class="text-input" placeholder="Search violations or IDs..." aria-label="Search event history">
+                            </div>
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
                                 <option value="">All risk levels</option>
@@ -613,6 +638,12 @@
                             <p>Automated JPEG snapshots and rolling MP4 clips captured during HIGH/CRITICAL events</p>
                         </div>
                         <div class="card-actions">
+                            <label for="evidenceTypeFilter" class="sr-only">Filter evidence media type</label>
+                            <select id="evidenceTypeFilter" class="select-input">
+                                <option value="all">All Media</option>
+                                <option value="snapshots">Snapshots Only</option>
+                                <option value="clips">Video Clips Only</option>
+                            </select>
                             <button id="refreshEvidence" class="btn btn-secondary" aria-label="Refresh evidence gallery">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
