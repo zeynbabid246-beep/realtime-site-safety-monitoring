@@ -74,6 +74,14 @@ const alertBadge = document.getElementById("alertBadge");
 const alertBadgeCount = document.getElementById("alertBadgeCount");
 const navAlertBadge = document.getElementById("navAlertBadge");
 
+const headerClock = document.getElementById("headerClock");
+const snapshotBtn = document.getElementById("snapshotBtn");
+const fullscreenBtn = document.getElementById("fullscreenBtn");
+const ackAllAlertsBtn = document.getElementById("ackAllAlertsBtn");
+const alertLevelFilter = document.getElementById("alertLevelFilter");
+const historySearchInput = document.getElementById("historySearchInput");
+const evidenceTypeFilter = document.getElementById("evidenceTypeFilter");
+
 const cameraPlaceholder = document.getElementById("cameraPlaceholder");
 const pageTitle = document.getElementById("pageTitle");
 const pageSubtitle = document.getElementById("pageSubtitle");
@@ -431,6 +439,9 @@ function setConnectionState(state) {
     connectionStatus.classList.add(state);
     if (text) {
         text.textContent = state === "connected" ? "Stream Active" : "Disconnected";
+    }
+    if (snapshotBtn) {
+        snapshotBtn.disabled = (state !== "connected");
     }
 }
 
@@ -837,6 +848,51 @@ if (audioToggleBtn) {
 
 
 // ============================================================
+// HEADER CLOCK & SNAPSHOT / FULLSCREEN
+// ============================================================
+
+function updateHeaderClock() {
+    if (headerClock) {
+        const now = new Date();
+        headerClock.textContent = now.toLocaleTimeString();
+    }
+}
+setInterval(updateHeaderClock, 1000);
+updateHeaderClock();
+
+if (snapshotBtn) {
+    snapshotBtn.addEventListener("click", () => {
+        if (!canvas) return;
+        const link = document.createElement("a");
+        link.download = `safety_snapshot_${Date.now()}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+        showToast("Snapshot Saved", "Current canvas frame saved to downloads", "SAFE");
+    });
+}
+
+if (fullscreenBtn) {
+    fullscreenBtn.addEventListener("click", () => {
+        const cameraCard = document.querySelector(".camera-container");
+        if (!cameraCard) return;
+        if (!document.fullscreenElement) {
+            cameraCard.requestFullscreen().catch(err => {
+                showToast("Fullscreen Error", err.message, "HIGH");
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    });
+}
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && lightboxModal && !lightboxModal.classList.contains("hidden")) {
+        closeLightbox();
+    }
+});
+
+
+// ============================================================
 // ALERT BADGE & FEED
 // ============================================================
 
@@ -864,10 +920,14 @@ async function loadAlertBadge() {
 async function loadAlerts() {
     const list = document.getElementById("alertsList");
     const status = document.getElementById("alertStatusFilter").value;
-    const qs = status ? `?status=${encodeURIComponent(status)}&limit=100` : "?limit=100";
+    const level = alertLevelFilter ? alertLevelFilter.value : "";
+
+    const params = new URLSearchParams({ limit: "100" });
+    if (status) params.set("status", status);
+    if (level) params.set("level", level);
 
     try {
-        const data = await getJson(`/api/alerts${qs}`);
+        const data = await getJson(`/api/alerts?${params.toString()}`);
         const alerts = data.alerts || [];
 
         if (alerts.length === 0) {
@@ -910,9 +970,26 @@ async function ackAlert(id) {
     try {
         await fetch(apiUrl(`/api/alerts/${id}/ack`), { method: "POST" });
         await Promise.all([loadAlerts(), loadAlertBadge()]);
+        showToast("Alert Acknowledged", `Alert #${id} marked as acknowledged`, "SAFE");
     } catch (err) {
         console.error("Ack failed:", err);
     }
+}
+
+if (ackAllAlertsBtn) {
+    ackAllAlertsBtn.addEventListener("click", async () => {
+        try {
+            const res = await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+            const data = await res.json();
+            showToast("All Alerts Acknowledged", `${data.count || 0} alert(s) acknowledged`, "SAFE");
+            await Promise.all([loadAlerts(), loadAlertBadge()]);
+        } catch (err) {
+            showToast("Bulk Ack Error", err.message, "HIGH");
+        }
+    });
+}
+if (alertLevelFilter) {
+    alertLevelFilter.addEventListener("change", loadAlerts);
 }
 
 
@@ -924,6 +1001,7 @@ async function loadHistory() {
     const body = document.getElementById("historyBody");
     const risk = document.getElementById("historyRiskFilter").value;
     const source = document.getElementById("historySourceFilter").value;
+    const search = historySearchInput ? historySearchInput.value.trim().toLowerCase() : "";
 
     const params = new URLSearchParams({ limit: "200" });
     if (risk) params.set("risk", risk);
@@ -931,7 +1009,16 @@ async function loadHistory() {
 
     try {
         const data = await getJson(`/api/events?${params.toString()}`);
-        const events = data.events || [];
+        let events = data.events || [];
+
+        if (search) {
+            events = events.filter(e => {
+                const summaryStr = JSON.stringify(e.violation_counts || {}).toLowerCase();
+                const sourceStr = (e.source || "").toLowerCase();
+                const riskStr = (e.risk_level || "").toLowerCase();
+                return summaryStr.includes(search) || sourceStr.includes(search) || riskStr.includes(search);
+            });
+        }
 
         if (events.length === 0) {
             body.innerHTML = '<tr><td colspan="8"><div class="empty">No recorded safety events matching filters.</div></td></tr>';
@@ -1049,10 +1136,17 @@ async function loadStatistics() {
 
 async function loadEvidence() {
     const gallery = document.getElementById("evidenceGallery");
+    const filterType = evidenceTypeFilter ? evidenceTypeFilter.value : "";
 
     try {
         const data = await getJson("/api/evidence?limit=60");
-        const items = data.evidence || [];
+        let items = data.evidence || [];
+
+        if (filterType === "image") {
+            items = items.filter(it => Boolean(it.image));
+        } else if (filterType === "clip") {
+            items = items.filter(it => Boolean(it.clip));
+        }
 
         if (items.length === 0) {
             gallery.innerHTML = `
@@ -1213,11 +1307,17 @@ document.getElementById("alertStatusFilter").addEventListener("change", loadAler
 document.getElementById("refreshHistory").addEventListener("click", loadHistory);
 document.getElementById("historyRiskFilter").addEventListener("change", loadHistory);
 document.getElementById("historySourceFilter").addEventListener("change", loadHistory);
+if (historySearchInput) {
+    historySearchInput.addEventListener("input", loadHistory);
+}
 
 document.getElementById("refreshStats").addEventListener("click", loadStatistics);
 document.getElementById("statsRange").addEventListener("change", loadStatistics);
 
 document.getElementById("refreshEvidence").addEventListener("click", loadEvidence);
+if (evidenceTypeFilter) {
+    evidenceTypeFilter.addEventListener("change", loadEvidence);
+}
 
 document.getElementById("generateReport").addEventListener("click", loadReport);
 document.getElementById("reportRange").addEventListener("change", loadReport);

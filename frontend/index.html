@@ -148,6 +148,11 @@
             </div>
 
             <div class="header-actions">
+                <div class="header-clock" id="headerClock">--:--:--</div>
+                <div class="site-status-pill" title="System Surveillance Mode">
+                    <span class="status-pulse-dot"></span>
+                    <span class="status-text">Live System Active</span>
+                </div>
                 <button type="button" class="header-badge" id="alertBadge" title="Unacknowledged alerts feed" aria-label="Unacknowledged alerts feed">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -201,6 +206,19 @@
                         </div>
                         <div class="card-actions">
                             <span class="fps-badge hidden" id="fpsCounter">0 FPS</span>
+                            <button id="snapshotBtn" class="btn btn-outline" disabled aria-label="Capture current frame snapshot" title="Save snapshot frame">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                    <circle cx="12" cy="13" r="4"/>
+                                </svg>
+                                Snapshot
+                            </button>
+                            <button id="fullscreenBtn" class="btn btn-outline" aria-label="Toggle camera view fullscreen">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                                </svg>
+                                Fullscreen
+                            </button>
                             <button id="startButton" class="btn btn-primary" aria-label="Start live webcam detection">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                     <polygon points="5 3 19 12 5 21 5 3"/>
@@ -467,6 +485,18 @@
                                 <option value="new">New / Unacknowledged</option>
                                 <option value="acknowledged">Acknowledged</option>
                             </select>
+                            <label for="alertLevelFilter" class="sr-only">Filter alert severity</label>
+                            <select id="alertLevelFilter" class="select-input">
+                                <option value="">All severities</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                                <option value="HIGH">HIGH</option>
+                            </select>
+                            <button id="ackAllAlertsBtn" class="btn btn-primary" aria-label="Acknowledge all active alerts">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                Ack All
+                            </button>
                             <button id="refreshAlerts" class="btn btn-secondary" aria-label="Refresh alerts">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -494,9 +524,12 @@
                             <p>Comprehensive audit log of recorded site incidents and risk ratings</p>
                         </div>
                         <div class="card-actions">
+                            <input type="search" id="historySearchInput" placeholder="Search events..." class="text-input" aria-label="Search event history">
+
                             <label for="historyRiskFilter" class="sr-only">Filter by risk level</label>
                             <select id="historyRiskFilter" class="select-input">
                                 <option value="">All risk levels</option>
+                                <option value="SAFE">SAFE</option>
                                 <option value="LOW">LOW</option>
                                 <option value="MEDIUM">MEDIUM</option>
                                 <option value="HIGH">HIGH</option>
@@ -613,6 +646,13 @@
                             <p>Automated JPEG snapshots and rolling MP4 clips captured during HIGH/CRITICAL events</p>
                         </div>
                         <div class="card-actions">
+                            <label for="evidenceTypeFilter" class="sr-only">Filter evidence media type</label>
+                            <select id="evidenceTypeFilter" class="select-input">
+                                <option value="">All media types</option>
+                                <option value="image">Snapshots Only</option>
+                                <option value="clip">Video Clips Only</option>
+                            </select>
+
                             <button id="refreshEvidence" class="btn btn-secondary" aria-label="Refresh evidence gallery">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <polyline points="23 4 23 10 17 10"/>
@@ -653,6 +693,14 @@
                                     <polyline points="14 2 14 8 20 8"/>
                                 </svg>
                                 Generate Summary
+                            </button>
+                            <button onclick="window.print()" class="btn btn-secondary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <polyline points="6 9 6 2 18 2 18 9"/>
+                                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                                    <rect x="6" y="14" width="12" height="8"/>
+                                </svg>
+                                Print Report
                             </button>
                             <a id="downloadJson" class="btn btn-outline" href="#" download="safety_report.json">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
