@@ -107,6 +107,20 @@ body {
 :focus-visible {
     outline: 2px solid var(--blue-600);
     outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+.alert-ack {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green-700);
+    background: var(--green-50);
+    border: 1px solid var(--green-100);
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
 }
 
 .sr-only {
@@ -1362,8 +1376,24 @@ body {
 
 
 /* =========================================================
-   RESPONSIVE DESIGN
+   RESPONSIVE DESIGN & SIDEBAR OVERLAY
 ========================================================= */
+
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(2px);
+    z-index: 90;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.active {
+    display: block;
+    opacity: 1;
+}
 
 @media (max-width: 1024px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); }

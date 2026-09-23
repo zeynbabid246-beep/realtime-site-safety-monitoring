@@ -73,6 +73,7 @@ const detectionList = document.getElementById("detectionList");
 const alertBadge = document.getElementById("alertBadge");
 const alertBadgeCount = document.getElementById("alertBadgeCount");
 const navAlertBadge = document.getElementById("navAlertBadge");
+const ackAllAlertsBtn = document.getElementById("ackAllAlerts");
 
 const cameraPlaceholder = document.getElementById("cameraPlaceholder");
 const pageTitle = document.getElementById("pageTitle");
@@ -248,6 +249,11 @@ if (closeModalBtn) closeModalBtn.addEventListener("click", closeLightbox);
 if (lightboxModal) {
     lightboxModal.addEventListener("click", (e) => {
         if (e.target === lightboxModal) closeLightbox();
+    });
+    window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !lightboxModal.classList.contains("hidden")) {
+            closeLightbox();
+        }
     });
 }
 
@@ -913,6 +919,22 @@ async function ackAlert(id) {
     } catch (err) {
         console.error("Ack failed:", err);
     }
+}
+
+async function ackAllAlerts() {
+    try {
+        const res = await fetch(apiUrl("/api/alerts/ack-all"), { method: "POST" });
+        const data = await res.json();
+        showToast("Alerts Acknowledged", `Acknowledged ${data.acknowledged_count || 0} alerts`, "HIGH");
+        await Promise.all([loadAlerts(), loadAlertBadge()]);
+    } catch (err) {
+        console.error("Ack all failed:", err);
+        showToast("Action Failed", "Could not acknowledge alerts", "HIGH");
+    }
+}
+
+if (ackAllAlertsBtn) {
+    ackAllAlertsBtn.addEventListener("click", ackAllAlerts);
 }
 
 
