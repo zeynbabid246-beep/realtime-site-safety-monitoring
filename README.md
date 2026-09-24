@@ -634,8 +634,8 @@ SAFETY_TELEGRAM_ENABLED=true
 - **Solution**: Try camera index 1 (`python scripts/live_webcam.py --camera 1`) and verify Windows Camera Privacy Settings allow desktop apps.
 
 #### 6. Face recognition unavailable / all faces show `Unknown`
-- **Cause a**: TensorFlow not installed in the running environment (the trained `.h5` needs the TF 2.4.1 environment, e.g. `face_training_env/`).
-- **Solution a**: Run the server/scripts with `face_training_env/Scripts/python.exe`, or install a compatible TensorFlow.
+- **Cause a**: TensorFlow not installed in the running environment.
+- **Solution a**: `pip install -r requirements.txt` (installs `tensorflow-cpu` + `tf-keras`). The trained `.h5` is a TF-2.4-era graph and needs `tf-keras` (official Keras 2) to load on modern TensorFlow — the loader handles this automatically.
 - **Cause b**: No workers registered.
 - **Solution b**: `python scripts/register_worker.py --worker-id worker_001 --name "Name" --images crops/*.jpg` (or create `data/face_data/input_images/<worker_id>/` with jpgs).
 - **Cause c**: Thresholds too strict for your footage.

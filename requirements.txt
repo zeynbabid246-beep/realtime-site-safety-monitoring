@@ -10,4 +10,10 @@ fastapi
 uvicorn
 python-multipart
 shapely
+scikit-learnshapely
 scikit-learn
+
+# Worker face verification (Siamese model). tf-keras is required on
+# TF >= 2.16 to load the TF-2.4-era .h5 graph (Keras 2 compatibility).
+tensorflow-cpu
+tf-keras

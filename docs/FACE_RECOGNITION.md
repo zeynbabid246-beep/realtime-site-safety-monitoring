@@ -77,12 +77,13 @@ over REST (see §7) without restarting anything.
   missing, or the `.h5` is missing, `FACE_SERVICE` is `None`, a warning is
   logged, and the app runs exactly as before — all `/face/*` endpoints
   return HTTP 503.
-- **Environment note:** the trained `.h5` needs the TF 2.4.1 environment
-  (`face_training_env/` in this workspace). The main app `venv`
-  (Python 3.11) cannot load TF 2.4.1, so run the server/CLI scripts that
-  need real verification from the TF environment
-  (`face_training_env/Scripts/python.exe`). Tests use `StubFaceBackend`
-  and run anywhere.
+- **Environment note:** the trained `.h5` is a TF-2.4-era graph. Modern
+  TensorFlow (>= 2.16, Keras 3) cannot rebuild it directly; install
+  `tensorflow-cpu` **plus** `tf-keras` (the official maintained Keras 2,
+  both already in `requirements.txt`). The loader prefers `tf-keras`
+  automatically and falls back to bundled Keras on older TF, so one
+  Python environment (the app `venv`) runs the whole system. Tests use
+  `StubFaceBackend` and run anywhere without TF.
 
 ---
 
@@ -147,7 +148,7 @@ so this never matters in production.
 ```bash
 # after registering at least one worker with 2+ reference images
 # (ideally 2+ workers for a meaningful impostor set):
-face_training_env/Scripts/python.exe scripts/calibrate_threshold.py
+python scripts/calibrate_threshold.py
 ```
 
 The script scores genuine pairs (live vs the same worker's other refs,
@@ -180,7 +181,7 @@ With `impostor_max = 0.0`, raising `FACE_DETECTION_THRESHOLD` toward
 ### Option A — from saved face crops (recommended)
 
 ```bash
-face_training_env/Scripts/python.exe scripts/register_worker.py \
+python scripts/register_worker.py \
     --worker-id worker_003 --name "Omar Khaled" --role "electrician" \
     --images crops/omar1.jpg crops/omar2.jpg "crops/omar_extra/*.jpg"
 ```
@@ -188,7 +189,7 @@ face_training_env/Scripts/python.exe scripts/register_worker.py \
 ### Option B — live from the webcam
 
 ```bash
-face_training_env/Scripts/python.exe scripts/register_worker.py \
+python scripts/register_worker.py \
     --worker-id worker_003 --name "Omar Khaled" --capture
 # C = capture a reference crop, R = finish, Q = quit
 ```
@@ -208,9 +209,9 @@ curl -X POST "http://127.0.0.1:8000/face/workers?worker_id=worker_003&name=Omar"
 ### Inspect / remove
 
 ```bash
-face_training_env/Scripts/python.exe scripts/register_worker.py --list
-face_training_env/Scripts/python.exe scripts/register_worker.py --worker-id worker_003 --remove   # deactivate
-face_training_env/Scripts/python.exe scripts/register_worker.py --worker-id worker_003 --purge    # delete + remove files
+python scripts/register_worker.py --list
+python scripts/register_worker.py --worker-id worker_003 --remove   # deactivate
+python scripts/register_worker.py --worker-id worker_003 --purge    # delete + remove files
 ```
 
 Good references = 5–10 crops per worker, 250×250-ish, varied lighting /
@@ -224,20 +225,20 @@ angle / expression, face only (like the notebook's anchor flow).
 # 1. Register workers (any option from §5)
 
 # 2. (Recommended) calibrate thresholds on your workers
-face_training_env/Scripts/python.exe scripts/calibrate_threshold.py
+python scripts/calibrate_threshold.py
 
 # 3a. Live verification demo only (no safety pipeline)
-face_training_env/Scripts/python.exe scripts/face_verify_webcam.py
+python scripts/face_verify_webcam.py
 
 # 3b. Webcam with SAFETY + identities together
-face_training_env/Scripts/python.exe scripts/live_webcam.py --face-recognition
+python scripts/live_webcam.py --face-recognition
 
 # 3c. Offline video with SAFETY + identities
-face_training_env/Scripts/python.exe scripts/analyze_video.py \
+python scripts/analyze_video.py \
     --video data/videos/test1.mp4 --face-recognition
 
 # 3d. Full web dashboard + REST API (run from the TF environment)
-face_training_env/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 The dashboard payload now includes `identities` (per-face results) and

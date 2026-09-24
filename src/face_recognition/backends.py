@@ -71,15 +71,6 @@ class SiameseFaceBackend:
         gpu_memory_growth: bool = True,
     ):
         import tensorflow as tf  # lazy: keeps TF optional at import time
-        from tensorflow.keras.layers import Layer
-
-        # Must match the custom layer saved inside the .h5.
-        class L1Dist(Layer):
-            def __init__(self, **kwargs):
-                super().__init__(**kwargs)
-
-            def call(self, input_embedding, validation_embedding):
-                return tf.math.abs(input_embedding - validation_embedding)
 
         self._tf = tf
         _configure_gpu(gpu_memory_growth)
@@ -91,14 +82,13 @@ class SiameseFaceBackend:
         logger.info("Loading Siamese face model: %s", model_path)
         # The .h5 was saved without optimizer state (inference-only), so
         # Keras warns about the missing training config; harmless here.
-        self.model = tf.keras.models.load_model(
-            str(model_path),
-            custom_objects={
-                "L1Dist": L1Dist,
-                "BinaryCrossentropy": tf.losses.BinaryCrossentropy,
-            },
-            compile=False,
-        )
+        #
+        # Modern TF (>=2.16) bundles Keras 3, which cannot rebuild the
+        # Keras-2-era graph inside this file (the custom L1Dist node was
+        # saved with a keyword-arg input). tf-keras is the official
+        # maintained Keras 2 and loads it correctly, so prefer it and
+        # transparently fall back to the bundled Keras on older TF.
+        self.model = self._load_legacy_h5(tf, model_path)
         self.input_size = int(input_size)
 
         # The shared embedding branch lives inside the Siamese graph.
@@ -113,6 +103,57 @@ class SiameseFaceBackend:
         self._lock = threading.RLock()
 
         logger.info("Siamese face model loaded (input %dx%dx3).", self.input_size, self.input_size)
+
+    # ------------------------------------------------------------------
+    # loading helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _load_legacy_h5(tf, model_path: Path) -> object:
+        """Load a TF-2.x-era .h5 graph under tf-keras (Keras 2) or Keras 3.
+
+        The custom L1Dist layer MUST inherit from the Layer base of the
+        same Keras implementation that rebuilds the graph, so the class
+        is generated per-loader.
+        """
+
+        def make_custom(layer_base):
+            class L1Dist(layer_base):
+                def __init__(self, **kwargs):
+                    super().__init__(**kwargs)
+
+                def call(self, input_embedding, validation_embedding):
+                    return tf.math.abs(input_embedding - validation_embedding)
+
+            return {
+                "L1Dist": L1Dist,
+                "BinaryCrossentropy": tf.losses.BinaryCrossentropy,
+            }
+
+        try:  # official Keras 2 implementation - required on TF >= 2.16
+            import tf_keras
+
+            logger.info("Using tf-keras (Keras 2) to load the legacy .h5")
+            try:
+                return tf_keras.models.load_model(
+                    str(model_path),
+                    custom_objects=make_custom(tf_keras.layers.Layer),
+                    compile=False,
+                )
+            except Exception as exc:  # noqa: BLE001 - fall back below
+                logger.warning(
+                    "tf-keras load failed (%s: %s); trying bundled Keras",
+                    exc.__class__.__name__,
+                    exc,
+                )
+        except ImportError:
+            logger.info("tf-keras not installed; loading with bundled Keras")
+
+        return tf.keras.models.load_model(
+            str(model_path),
+            custom_objects=make_custom(tf.keras.layers.Layer),
+            compile=False,
+        )
 
     # ------------------------------------------------------------------
     # scoring
