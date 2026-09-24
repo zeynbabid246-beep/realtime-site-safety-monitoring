@@ -128,8 +128,17 @@ function WorkerRow({ identity }: { identity: FaceIdentity }) {
 }
 
 function MonitorPage() {
-  const { attachVideo, attachCanvasImage, connection, start, stop, latestPayload, fps, error } =
-    useLiveCamera();
+  const {
+    attachVideo,
+    attachCanvasImage,
+    connection,
+    start,
+    stop,
+    latestPayload,
+    fps,
+    error,
+    hasFrame,
+  } = useLiveCamera();
 
   const handleStart = useCallback(() => void start(), [start]);
 
@@ -204,15 +213,17 @@ function MonitorPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="relative aspect-video w-full overflow-hidden rounded-lg border bg-muted">
-              {/* Raw webcam (shown while streaming so the operator sees themselves) */}
+            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border bg-muted">
+              {/* Raw webcam - placeholder only, hidden once annotated frames flow
+                  (otherwise the 16:9 raw feed sticks out around the 4:3 annotated
+                  frame and looks like a doubled camera). */}
               <video
                 ref={attachVideo}
                 playsInline
                 muted
                 className={cn(
                   "absolute inset-0 h-full w-full object-cover",
-                  connection === "connected" ? "opacity-100" : "opacity-0",
+                  connection === "connected" && !hasFrame ? "opacity-100" : "opacity-0",
                 )}
               />
               {/* Backend-annotated frame overlays the raw video once frames return */}
@@ -221,7 +232,7 @@ function MonitorPage() {
                 alt="AI-annotated live camera feed"
                 className={cn(
                   "absolute inset-0 h-full w-full object-contain transition-opacity duration-200",
-                  connection === "connected" ? "opacity-100" : "opacity-0",
+                  connection === "connected" && hasFrame ? "opacity-100" : "opacity-0",
                 )}
               />
 

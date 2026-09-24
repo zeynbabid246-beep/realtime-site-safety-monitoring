@@ -23,6 +23,8 @@ interface UseLiveCameraResult {
   latestPayload: SafetyPayload | null;
   fps: number;
   error: string | null;
+  /** True once at least one backend-annotated frame has arrived. */
+  hasFrame: boolean;
 }
 
 /**
@@ -51,6 +53,7 @@ export function useLiveCamera(options: UseLiveCameraOptions = {}): UseLiveCamera
   const [latestPayload, setLatestPayload] = useState<SafetyPayload | null>(null);
   const [fps, setFps] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [hasFrame, setHasFrame] = useState(false);
 
   const sendNextFrame = useCallback(() => {
     const socket = socketRef.current;
@@ -91,6 +94,7 @@ export function useLiveCamera(options: UseLiveCameraOptions = {}): UseLiveCamera
           image.onload = () => URL.revokeObjectURL(url);
           image.src = url;
         }
+        setHasFrame(true);
         frameCountRef.current += 1;
         const now = performance.now();
         if (now - fpsWindowRef.current >= 1000) {
@@ -130,6 +134,7 @@ export function useLiveCamera(options: UseLiveCameraOptions = {}): UseLiveCamera
     if (videoRef.current) videoRef.current.srcObject = null;
     setConnection("idle");
     setFps(0);
+    setHasFrame(false);
   }, []);
 
   const start = useCallback(async () => {
@@ -199,5 +204,15 @@ export function useLiveCamera(options: UseLiveCameraOptions = {}): UseLiveCamera
     imageRef.current = element;
   }, []);
 
-  return { attachVideo, attachCanvasImage, connection, start, stop, latestPayload, fps, error };
+  return {
+    attachVideo,
+    attachCanvasImage,
+    connection,
+    start,
+    stop,
+    latestPayload,
+    fps,
+    error,
+    hasFrame,
+  };
 }
