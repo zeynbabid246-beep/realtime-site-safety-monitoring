@@ -37,3 +37,7 @@ notebooks/training_checkpoints/
 
 # TensorFlow 2.4.1 training environment (6 GB, reproducible via requirements)
 face_training_env/
+
+# Notebook training/demo data (kept local only - large datasets)
+notebooks/application_data/
+notebooks/data/
