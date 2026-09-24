@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   Bell,
+  CheckCheck,
   Construction,
   FileBarChart,
   History,
@@ -16,7 +17,10 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getHealth, listAlerts } from "@/lib/api";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RiskBadge } from "@/components/status-badge";
+import { acknowledgeAlert, acknowledgeAllAlerts, getHealth, listAlerts, relativeTime } from "@/lib/api";
+import { type RiskLevel } from "@/lib/types";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 
@@ -161,18 +165,7 @@ export function SiteHeader({ children: page }: { children: ReactNode }) {
               {backendOnline ? `API ${health.data?.version ?? ""}`.trim() : "API offline"}
             </div>
 
-            <Link
-              to="/history"
-              aria-label={`Alerts${unacknowledged ? `, ${unacknowledged} unacknowledged` : ""}`}
-              className="relative grid size-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Bell className="size-4.5" />
-              {unacknowledged > 0 ? (
-                <span className="absolute -right-0.5 -top-0.5 grid min-w-4 place-items-center rounded-full bg-critical px-1 text-[9px] font-bold text-white">
-                  {unacknowledged > 99 ? "99+" : unacknowledged}
-                </span>
-              ) : null}
-            </Link>
+            <AlertsPopover unacknowledgedCount={unacknowledged} />
 
             <Button
               variant="ghost"
@@ -222,5 +215,121 @@ export function SiteHeader({ children: page }: { children: ReactNode }) {
         <main className="flex-1 px-4 py-4 lg:px-6 lg:py-5">{page}</main>
       </div>
     </div>
+  );
+}
+
+function AlertsPopover({ unacknowledgedCount }: { unacknowledgedCount: number }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const alertsQuery = useQuery({
+    queryKey: ["alerts", "popover"],
+    queryFn: () => listAlerts({ status: "new", limit: 10 }),
+    enabled: open,
+    refetchInterval: 15_000,
+  });
+
+  const ackMutation = useMutation({
+    mutationFn: acknowledgeAlert,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      void queryClient.invalidateQueries({ queryKey: ["report"] });
+    },
+  });
+
+  const ackAllMutation = useMutation({
+    mutationFn: acknowledgeAllAlerts,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      void queryClient.invalidateQueries({ queryKey: ["report"] });
+    },
+  });
+
+  const alerts = alertsQuery.data?.alerts ?? [];
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Safety alerts${unacknowledgedCount ? `, ${unacknowledgedCount} unacknowledged` : ""}`}
+          className="relative grid size-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Bell className="size-4.5" />
+          {unacknowledgedCount > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 grid min-w-4 place-items-center rounded-full bg-critical px-1 text-[9px] font-bold text-white">
+              {unacknowledgedCount > 99 ? "99+" : unacknowledgedCount}
+            </span>
+          ) : null}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0 sm:w-96">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Bell className="size-4 text-primary" />
+            <span className="font-display text-sm font-semibold">Active alerts</span>
+            {unacknowledgedCount > 0 ? (
+              <span className="rounded-full bg-critical/10 px-2 py-0.5 text-[10px] font-bold text-critical">
+                {unacknowledgedCount} new
+              </span>
+            ) : null}
+          </div>
+          {unacknowledgedCount > 0 ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              disabled={ackAllMutation.isPending}
+              onClick={() => ackAllMutation.mutate()}
+            >
+              <CheckCheck className="size-3.5" /> Ack all
+            </Button>
+          ) : null}
+        </div>
+
+        <div className="max-h-80 overflow-y-auto divide-y p-1">
+          {alertsQuery.isLoading ? (
+            <p className="p-4 text-center text-xs text-muted-foreground">Loading alerts…</p>
+          ) : alerts.length === 0 ? (
+            <div className="p-6 text-center text-xs text-muted-foreground">
+              <CheckCheck className="mx-auto size-6 text-safe" />
+              <p className="mt-2 font-medium text-foreground">All clear!</p>
+              <p className="mt-0.5 text-[11px]">No unacknowledged safety alerts.</p>
+            </div>
+          ) : (
+            alerts.map((alert) => (
+              <div key={alert.id} className="flex items-start gap-2.5 p-3.5 text-xs transition-colors hover:bg-muted/50">
+                <RiskBadge level={alert.level as RiskLevel} size="sm" className="mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-foreground truncate">{alert.title}</p>
+                  <p className="line-clamp-2 mt-0.5 text-muted-foreground">{alert.message}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{relativeTime(alert.ts)}</p>
+                </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+                  aria-label={`Acknowledge alert: ${alert.title}`}
+                  disabled={ackMutation.isPending}
+                  onClick={() => ackMutation.mutate(alert.id)}
+                >
+                  <CheckCheck className="size-3.5" />
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="border-t p-2 text-center">
+          <Link
+            to="/history"
+            onClick={() => setOpen(false)}
+            className="block rounded-md py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent"
+          >
+            View all history & alerts →
+          </Link>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
