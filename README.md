@@ -4,6 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-2.0.0-009688.svg)](https://fastapi.tiangolo.com/)
 [![YOLOv8/v11](https://img.shields.io/badge/YOLO-Ultralytics-00FFFF.svg)](https://docs.ultralytics.com/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C.svg)](https://pytorch.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-3.x-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 An intelligent, real-time computer vision and spatial intelligence platform designed for construction site safety monitoring. The system combines multi-model deep learning (YOLO), ByteTrack object tracking, unsupervised geometric clustering (HDBSCAN), anatomical spatial association, and a trained Siamese face-verification model to automatically detect safety violations, heavy machinery proximity hazards, unauthorized danger-zone incursions, early fire/smoke incidents — and to **identify which registered worker** is involved.
@@ -120,9 +121,10 @@ This system provides automated, continuous optical surveillance for job sites by
 | **Web Framework** | **FastAPI & Uvicorn** | High-performance asynchronous REST API server and WebSocket streaming handler. |
 | **Computer Vision** | **OpenCV (`opencv-python`)** | Video capture, frame decoding/encoding, video writing, and overlay rendering. |
 | **Visualization** | **Ultralytics Annotator / CVZone** | Native bounding box rendering, label badges, and custom HUD banners. |
+| **Database** | **SQLite** (via Python `sqlite3`) | Thread-safe persistent storage of safety events, alerts, and aggregate counters (`data/safety.db`), powering dashboard statistics, history, and CSV reports. |
 | **Computational Geometry**| **Shapely** | Polygon creation (convex hulls), polygon intersection, and point-in-polygon testing. |
 | **Machine Learning** | **Scikit-Learn (HDBSCAN)** | Unsupervised density-based clustering of safety cones into dangerous zones. |
-| **Frontend** | **HTML5 / CSS3 / Vanilla JavaScript** | Responsive web interface, WebSocket camera streaming, and dynamic metrics cards. |
+| **Frontend** | **React + TypeScript (TanStack Start/Router, Tailwind v4, shadcn/ui)** | Responsive safety-monitoring SPA with WebSocket camera streaming: dashboard, live monitor, workers, history, and reports pages. |
 
 ---
 
