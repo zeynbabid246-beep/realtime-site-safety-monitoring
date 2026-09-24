@@ -6,7 +6,9 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An intelligent, real-time computer vision and spatial intelligence platform designed for construction site safety monitoring. The system combines multi-model deep learning (YOLO), ByteTrack object tracking, unsupervised geometric clustering (HDBSCAN), and anatomical spatial association to automatically detect safety violations, heavy machinery proximity hazards, unauthorized danger-zone incursions, and early fire/smoke incidents.
+An intelligent, real-time computer vision and spatial intelligence platform designed for construction site safety monitoring. The system combines multi-model deep learning (YOLO), ByteTrack object tracking, unsupervised geometric clustering (HDBSCAN), anatomical spatial association, and a trained Siamese face-verification model to automatically detect safety violations, heavy machinery proximity hazards, unauthorized danger-zone incursions, early fire/smoke incidents — and to **identify which registered worker** is involved.
+
+> **👷 Worker Face Recognition:** registered workers are verified on camera with the trained Siamese model (`notebooks/siamesemodelv2.h5`) and linked to detected Person boxes; unrecognized faces are shown as `Unknown`. See **[docs/FACE_RECOGNITION.md](docs/FACE_RECOGNITION.md)** for worker registration, data layout, thresholds, and the REST API.
 
 ---
 
@@ -23,7 +25,8 @@ An intelligent, real-time computer vision and spatial intelligence platform desi
   - [1. Web Application & Live Dashboard (FastAPI)](#1-web-application--live-dashboard-fastapi)
   - [2. Offline Video Safety Analysis CLI](#2-offline-video-safety-analysis-cli)
   - [3. Real-Time Webcam / RTSP Stream CLI](#3-real-time-webcam--rtsp-stream-cli)
-  - [4. REST API Image & Video Endpoints](#4-rest-api-image--video-endpoints)
+  - [4. Worker Face Recognition (Siamese verification)](#4-worker-face-recognition-siamese-verification)
+  - [5. REST API Image & Video Endpoints](#5-rest-api-image--video-endpoints)
 - [Environment Configuration](#️-environment-configuration)
 - [Configuration Reference](#-configuration-reference)
 - [Input & Output Specifications](#-input--output-specifications)
@@ -80,7 +83,8 @@ This system provides automated, continuous optical surveillance for job sites by
 3. **Dynamic Danger Zones**: Uses HDBSCAN clustering and convex hull geometry to detect boundaries demarcated by safety cones and flags workers trespassing inside.
 4. **Utility Pole Proximity**: Identifies cranes or booms operating hazardously close to overhead power poles and lines.
 5. **Fire & Smoke Debouncing**: Detects combustion hazards early, filtering out optical reflections and transient dust plumes.
-6. **Overall Risk Index**: Aggregates all concurrent hazards into a standardized safety risk rating: **`SAFE`**, **`LOW`**, **`MEDIUM`**, **`HIGH`**, or **`CRITICAL`**.
+6. **Worker Identification**: Verifies detected Person faces against registered workers (`data/face_data/input_images/<worker_id>/`) with the trained Siamese verification model; multiple simultaneous workers supported, `Unknown` for unregistered faces. REST API + CLI registration, threshold calibration script included.
+7. **Overall Risk Index**: Aggregates all concurrent hazards into a standardized safety risk rating: **`SAFE`**, **`LOW`**, **`MEDIUM`**, **`HIGH`**, or **`CRITICAL`**.
 
 ---
 
@@ -99,6 +103,7 @@ This system provides automated, continuous optical surveillance for job sites by
 | **Full Web Application** | FastAPI backend with WebSocket streaming (`/safety/ws/camera`) and modern responsive frontend dashboard with live camera controls and real-time alert counters. |
 | **Persistent Monitoring** | SQLite storage records all safety events with cooldown-bounded deduplication. Dashboard, alerts, history, statistics, evidence gallery, and CSV reports. |
 | **Alert System** | HIGH/CRITICAL events trigger in-dashboard alerts and optional Telegram push notifications with annotated snapshots. |
+| **Worker Face Verification** | Siamese one-shot-model identity layer over detected Person boxes: multi-worker registry (`workers.json` + reference crops), per-track result caching, calibrated two-threshold verification, green/red identity overlay, and `/face/*` REST endpoints. Fully optional and failure-isolated. |
 | **Evidence Capture** | Automatic annotated JPEG snapshots and rolling pre-buffer MP4 clips on HIGH/CRITICAL violations, with bounded storage and auto-pruning. |
 | **Multi-Tab Dashboard** | Vanilla JS SPA with live camera, alerts feed, event history, statistics charts, evidence gallery, and downloadable reports. |
 | **Detailed CSV Logging** | Exports comprehensive frame-by-frame risk indices, active violation counts, and hazard categories for post-job safety audits. |
@@ -137,6 +142,11 @@ construction_safety_system/
 ├── data/                                # Runtime data (auto-created)
 │   ├── safety.db                        # SQLite database (events, alerts, counters)
 │   ├── evidence/                        # Captured snapshots and video clips
+│   ├── face_data/                       # Worker identity data (face recognition)
+│   │   ├── workers.json                 # Worker registry metadata (auto-managed)
+│   │   ├── input_images/<worker_id>/    # Reference face crops per worker
+│   │   ├── embeddings/<worker_id>.npy   # Embedding cache (auto-managed)
+│   │   └── calibration.json             # Calibrated verification thresholds
 │   ├── images/                          # Sample test images
 │   ├── output/                          # Output directory
 │   │   └── videos/                      # Generated annotated videos and CSV reports
@@ -154,7 +164,10 @@ construction_safety_system/
 │       └── best.pt                      # Unified hazard model (workers, PPE, cones, machines, poles)
 ├── scripts/                             # Standalone command-line utilities
 │   ├── analyze_video.py                 # Offline video analysis with CSV export and filter telemetry
-│   └── live_webcam.py                   # Direct OpenCV webcam / camera streaming utility
+│   ├── live_webcam.py                   # Direct OpenCV webcam / camera streaming utility
+│   ├── register_worker.py               # Worker identity registration CLI (files/webcam/list/remove)
+│   ├── calibrate_threshold.py           # Siamese verification threshold calibration
+│   └── face_verify_webcam.py            # Standalone live multi-worker face verification
 ├── src/                                 # Core business logic and safety algorithms
 │   ├── pipeline.py                      # Shared SafetyPipeline: single per-frame code path
 │   ├── fire/                            # Fire & smoke detection module
@@ -169,15 +182,31 @@ construction_safety_system/
 │   │   └── track_confirmation.py        # Track hit buffer + StaticPersonFilter motion analyzer
 │   ├── machine/                         # Heavy machinery module
 │   │   └── machine_detector.py          # Heavy equipment inference wrapper
-│   └── safety/                          # Central safety rules and geometry engine
+│   ├── safety/                          # Central safety rules and geometry engine
+│   │   ├── __init__.py
+│   │   ├── distance_calculator.py       # Ground-contact proximity calculation
+│   │   ├── geometry.py                  # HDBSCAN cone clustering, Shapely polygons, DangerZoneTracker
+│   │   ├── overlay.py                   # High-contrast visual annotation and risk status banner
+│   │   ├── rules.py                     # SafetyConfig, PPE/zone/proximity rules, risk assessment
+│   │   └── safety_engine.py             # Central orchestrator combining all hazard subsystems
+│   └── face_recognition/                # Worker identity / Siamese verification layer
 │       ├── __init__.py
-│       ├── distance_calculator.py       # Ground-contact proximity calculation
-│       ├── geometry.py                  # HDBSCAN cone clustering, Shapely polygons, DangerZoneTracker
-│       ├── overlay.py                   # High-contrast visual annotation and risk status banner
-│       ├── rules.py                     # SafetyConfig, PPE/zone/proximity rules, risk assessment
-│       └── safety_engine.py             # Central orchestrator combining all hazard subsystems
-├── tests/                               # Pytest test suite (120+ model-free unit tests)
+│       ├── config.py                    # FaceRecognitionConfig (env-overridable tunables)
+│       ├── preprocessing.py             # Notebook-exact face crop preprocessing
+│       ├── backends.py                  # SiameseFaceBackend (TF) + StubFaceBackend (tests)
+│       ├── registry.py                  # WorkerRegistry: workers.json, reference images, embeddings
+│       ├── face_detector.py             # Person box -> head-band face crops
+│       ├── service.py                   # FaceRecognitionService: multi-worker verification
+│       ├── overlay.py                   # Identity boxes/labels + FACES HUD banner
+│       └── calibration.py               # Threshold calibration -> calibration.json
+├── docs/
+│   ├── DETECTION_LIMITATIONS.md         # Code-fixable vs model-bound limitations
+│   └── FACE_RECOGNITION.md              # Worker face recognition: data layout, registration,
+│                                        #   model loading, verification, thresholds, REST API
+├── tests/                               # Pytest test suite (140+ model-free unit tests)
 │   ├── conftest.py                      # Test fixtures and helpers
+│   ├── test_face_recognition.py         # Face recognition layer tests (stub backend)
+│   ├── test_pipeline_identity.py        # Pipeline identity-integration tests
 │   ├── test_alerting.py                 # Alert engine tests
 │   ├── test_detection_filter.py         # Detection filter tests
 │   ├── test_distance.py                 # Distance calculator tests
@@ -262,7 +291,7 @@ Both models are loaded once at server startup and shared across all streams (RES
 
 ### 1. Web Application & Live Dashboard (Recommended)
 
-The web application provides a full-featured dashboard with live camera streaming, real-time alerts, event history, statistics, evidence gallery, and reports.
+The web application is a modern React + TypeScript SPA (TanStack Router, Tailwind v4, shadcn/ui) with a blue/white industrial design and a dark control-room theme. It ships pre-built: FastAPI serves it directly from `frontend/.output`.
 
 **Start the server:**
 ```bash
@@ -270,8 +299,19 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 **Open your browser:**
-- **Dashboard**: `http://127.0.0.1:8000` — Multi-tab interface with live camera, alerts, history, statistics, evidence, and reports
+- **Dashboard**: `http://127.0.0.1:8000` — live status, risk distribution, PPE/face-recognition status, recent events
+- **Live Monitor**: `/monitor` — webcam through the full AI pipeline (YOLO + ByteTrack + Siamese worker verification) with per-face Verified/Unknown badges, PPE and hazard panels
+- **Workers**: `/workers` — register / add faces / deactivate / purge workers (writes `data/face_data/`)
+- **History**: `/history` — filterable event log + alert feed with acknowledgement
+- **Reports**: `/reports` — backend-computed aggregates + CSV/JSON export
 - **API Documentation**: `http://127.0.0.1:8000/docs` — Interactive Swagger UI for all REST endpoints
+
+> To develop the frontend instead of serving the built bundle:
+> ```bash
+> cd frontend && bun install && bun run dev   # dev server on :5173, proxies API to :8000
+> bun run build:spa                           # production build (client-only SPA shell + assets in .output/public) served by FastAPI
+> bun run build                               # SSR build (separate Node server process) — NOT served by FastAPI
+> ```
 
 #### Using Live Webcam in the Dashboard
 
@@ -349,7 +389,43 @@ python scripts/live_webcam.py --camera 0 --hazard-conf 0.30 --fire-conf 0.25
 
 ---
 
-### 4. REST API Image & Video Endpoints
+### 4. Worker Face Recognition (Siamese verification)
+
+Identify **which registered worker** is on camera. Full guide:
+**[docs/FACE_RECOGNITION.md](docs/FACE_RECOGNITION.md)**.
+
+```bash
+# 1. Register workers (5-10 face crops each; webcam capture also available)
+python scripts/register_worker.py --worker-id worker_001 \
+    --name "Ahmed Ali" --role "crane operator" \
+    --images crops/ahmed1.jpg crops/ahmed2.jpg "crops/ahmed_extra/*.jpg"
+
+# 2. (Recommended) calibrate thresholds on YOUR workers
+python scripts/calibrate_threshold.py
+
+# 3. Live verification demo (identity only)
+python scripts/face_verify_webcam.py
+
+# 4. Safety pipeline + identities together
+python scripts/live_webcam.py --face-recognition
+python scripts/analyze_video.py --video data/videos/test1.mp4 --face-recognition
+
+# 5. Full dashboard: identities arrive in the websocket payload and are
+#    drawn on the live feed automatically when workers are registered.
+```
+
+REST: `GET/POST /face/workers`, `POST /face/workers/{id}/images`,
+`DELETE /face/workers/{id}`, `POST /face/verify`, `POST /face/calibrate`.
+
+**Where worker data lives:** `data/face_data/input_images/<worker_id>/*.jpg`
+(reference crops) + `data/face_data/workers.json` (registry) - adding or
+removing a worker never requires touching source code. The model
+(`notebooks/siamesemodelv2.h5`) is loaded once at startup and shared;
+missing TensorFlow or model file simply disables the feature.
+
+---
+
+### 5. REST API Image & Video Endpoints
 
 #### Process a Single Image:
 ```bash
@@ -557,6 +633,14 @@ SAFETY_TELEGRAM_ENABLED=true
 - **Cause**: Incorrect camera index or OS camera privacy block.
 - **Solution**: Try camera index 1 (`python scripts/live_webcam.py --camera 1`) and verify Windows Camera Privacy Settings allow desktop apps.
 
+#### 6. Face recognition unavailable / all faces show `Unknown`
+- **Cause a**: TensorFlow not installed in the running environment (the trained `.h5` needs the TF 2.4.1 environment, e.g. `face_training_env/`).
+- **Solution a**: Run the server/scripts with `face_training_env/Scripts/python.exe`, or install a compatible TensorFlow.
+- **Cause b**: No workers registered.
+- **Solution b**: `python scripts/register_worker.py --worker-id worker_001 --name "Name" --images crops/*.jpg` (or create `data/face_data/input_images/<worker_id>/` with jpgs).
+- **Cause c**: Thresholds too strict for your footage.
+- **Solution c**: `python scripts/calibrate_threshold.py`, or raise/lower `FACE_DETECTION_THRESHOLD` / `FACE_VERIFICATION_THRESHOLD` in `.env`.
+
 ---
 
 ## 💡 Performance & Detection Tuning Tips
@@ -576,6 +660,10 @@ SAFETY_TELEGRAM_ENABLED=true
 ```text
 Hazard Model Weights   : models/hazard/best.pt
 Fire/Smoke Weights     : models/fire_smoke/best.pt
+Siamese Face Model     : notebooks/siamesemodelv2.h5
+Worker Registry        : data/face_data/workers.json
+Worker Reference Faces : data/face_data/input_images/<worker_id>/*.jpg
+Face Docs              : docs/FACE_RECOGNITION.md
 Core FastAPI App       : app/main.py
 Alert Engine           : app/alerting.py
 Evidence Capture       : app/evidence.py
@@ -584,8 +672,12 @@ Reports Module         : app/reports.py
 Settings               : app/settings.py
 SQLite Storage         : app/storage.py
 Shared Pipeline        : src/pipeline.py
+Face Recognition Layer : src/face_recognition/
 Video Batch Script     : scripts/analyze_video.py
 Live Webcam Script     : scripts/live_webcam.py
+Worker Registration    : scripts/register_worker.py
+Threshold Calibration  : scripts/calibrate_threshold.py
+Face Verify Demo       : scripts/face_verify_webcam.py
 Detection Filter Logic : src/hazard/detection_filter.py
 Tracking & Debouncing  : src/hazard/track_confirmation.py
 Web Dashboard Assets   : frontend/ (index.html, app.js, style.css)

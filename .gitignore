@@ -28,3 +28,12 @@ person_tracking_test/output/
 # IDE
 .vscode/
 .idea/
+
+# Training checkpoints (2.3 GB - final model already saved as notebooks/siamesemodelv2.h5)
+notebooks/training_checkpoints/
+
+# Freebuff workspace metadata
+.freebuff/
+
+# TensorFlow 2.4.1 training environment (6 GB, reproducible via requirements)
+face_training_env/

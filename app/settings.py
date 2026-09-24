@@ -88,6 +88,15 @@ class Settings:
     telegram_chat_id: str = field(default_factory=lambda: os.environ.get("TELEGRAM_CHAT_ID", "").strip())
     telegram_enabled: bool = field(default_factory=lambda: os.environ.get("SAFETY_TELEGRAM_ENABLED", "true").lower() != "false")
 
+    # --- face recognition / worker verification (see settings) ---------
+    face_recognition_enabled: bool = field(
+        default_factory=lambda: os.environ.get("FACE_RECOGNITION_ENABLED", "true").lower() != "false"
+    )
+    face_backend: str = field(
+        default_factory=lambda: os.environ.get("FACE_BACKEND", "siamese").strip().lower()
+    )
+    face_frame_stride: int = field(default_factory=lambda: _env_int("FACE_FRAME_STRIDE", 1))
+
     @property
     def telegram_configured(self) -> bool:
         return bool(self.telegram_enabled and self.telegram_bot_token and self.telegram_chat_id)

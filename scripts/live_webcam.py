@@ -55,6 +55,10 @@ def parse_args() -> argparse.Namespace:
                              "building misclassified as machinery) instead of suppressing them.")
     parser.add_argument("--disable-filters", action="store_true",
                         help="Skip size/confidence/aspect-ratio and track-confirmation gates.")
+    parser.add_argument("--face-recognition", action="store_true",
+                        help="Enable worker identification (Siamese face verification).")
+    parser.add_argument("--face-frame-stride", type=int, default=None,
+                        help="Verify identities every Nth frame (default: FACE_FRAME_STRIDE env or 1).")
     return parser.parse_args()
 
 
@@ -80,6 +84,40 @@ def open_camera(index: int, width: int, height: int) -> cv2.VideoCapture:
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     return cap
+
+
+def _maybe_face_service(args):
+    """Build the shared FaceRecognitionService for --face-recognition."""
+
+    if not args.face_recognition:
+        return None
+
+    try:
+        from src.face_recognition.config import FaceRecognitionConfig
+        from src.face_recognition.registry import WorkerRegistry
+        from src.face_recognition.service import FaceRecognitionService
+        from src.face_recognition import calibration as face_calibration
+        from src.face_recognition.backends import create_backend
+
+        face_config = FaceRecognitionConfig()
+        face_config.apply_calibration(face_calibration.load_calibration(face_config))
+        face_config.ensure_dirs()
+        registry = WorkerRegistry(face_config)
+        registry.auto_discover_workers()
+        backend = create_backend(face_config)
+        service = FaceRecognitionService(face_config, backend=backend, registry=registry)
+        workers = registry.worker_ids(active_only=True)
+        print(f"Face recognition: ON  workers={workers} "
+              f"thresholds=({face_config.detection_threshold:.2f}, "
+              f"{face_config.verification_threshold:.2f})")
+        if not workers:
+            print("  (no workers registered - all faces will show as UNKNOWN; "
+                  "register via scripts/register_worker.py)")
+        return service
+    except Exception as exc:  # noqa: BLE001
+        print(f"WARNING: face recognition unavailable ({exc}) - continuing without.",
+              file=sys.stderr)
+        return None
 
 
 def main() -> None:
@@ -135,6 +173,8 @@ def main() -> None:
         enable_track_confirmation=track_confirmation is not None,
         enable_fire_confirmation=fire_detector is not None,
         track_confirmation=track_confirmation,
+        face_service=_maybe_face_service(args),
+        face_frame_stride=args.face_frame_stride or 1,
     )
 
     cap = open_camera(args.camera, args.width, args.height)

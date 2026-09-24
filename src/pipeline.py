@@ -63,6 +63,11 @@ from src.safety.safety_engine import SafetyEngine
 from src.safety.geometry import DangerZoneTracker
 from src.safety.rules import SafetyConfig
 from src.safety.overlay import draw_safety_overlay, draw_unconfirmed_fire_debug
+from src.face_recognition.service import FaceRecognitionService
+from src.face_recognition.overlay import (
+    draw_face_recognition_banner,
+    draw_identity_annotations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +87,7 @@ class FrameResult:
     raw_detections: List[Dict[str, Any]]         # pre-filter hazard detections
     fire_detections: List[Dict[str, Any]]        # confirmed fire/smoke
     raw_fire_detections: List[Dict[str, Any]]    # pre-confirmation fire/smoke
+    identities: List[Any] = field(default_factory=list)  # FrameIdentity per verified face
     annotated: Optional[np.ndarray] = None
     filter_stats: Dict[str, int] = field(default_factory=dict)
     fire_gate_stats: Dict[str, Any] = field(default_factory=dict)
@@ -139,9 +145,14 @@ class SafetyPipeline:
         zone_tracker: Optional[DangerZoneTracker] = None,
         track_confirmation: Optional[TrackConfirmationTracker] = None,
         fire_tracker: Optional[FireConfirmationTracker] = None,
+        face_service: Optional[FaceRecognitionService] = None,
+        face_frame_stride: int = 1,
     ):
         self.hazard_detector = hazard_detector
         self.fire_detector = fire_detector
+        self.face_service = face_service  # optional worker-identity layer
+        self.face_frame_stride = max(1, int(face_frame_stride))
+        self._face_frame_counter = 0
         self.config = config if config is not None else SafetyConfig()
 
         self.enable_detection_filter = enable_detection_filter
@@ -259,7 +270,27 @@ class SafetyPipeline:
             frame_width=float(frame.shape[1]),
         )
 
-        # 5. Overlay.
+        # 5. Face recognition (optional): verify every detectable face
+        #    against the registered workers. Strides by frame to bound cost
+        #    on slow machines; cached identities keep per-track labels
+        #    stable on the skipped frames.
+        identities: List[Any] = []
+        face_due = (
+            self.face_service is not None
+            and self._face_frame_counter % self.face_frame_stride == 0
+        )
+        self._face_frame_counter += 1
+        if face_due:
+            try:
+                identities = self.face_service.identify_faces(frame, persons)
+            except Exception as exc:  # noqa: BLE001
+                # Identity must never take the safety pipeline down.
+                logger.warning("Face recognition failed on frame: %s", exc)
+                identities = []
+        elif self.face_service is not None:
+            identities = self.face_service.last_identities(frame, persons)
+
+        # 6. Overlay.
         annotated = None
         if draw:
             annotated = draw_safety_overlay(
@@ -267,6 +298,14 @@ class SafetyPipeline:
             )
             if self.draw_raw_fire:
                 draw_unconfirmed_fire_debug(annotated, raw_fire, fire_detections)
+            if identities:
+                annotated = draw_identity_annotations(annotated, identities)
+                annotated = draw_face_recognition_banner(
+                    annotated,
+                    identities,
+                    recognition_enabled=True,
+                    workers_registered=self.face_service.stats()["workers_registered"],
+                )
 
         return FrameResult(
             result=result,
@@ -276,6 +315,7 @@ class SafetyPipeline:
             raw_detections=raw_detections,
             fire_detections=fire_detections,
             raw_fire_detections=raw_fire,
+            identities=identities,
             annotated=annotated,
             filter_stats=filter_stats,
             fire_gate_stats=fire_gate_stats,
@@ -375,3 +415,26 @@ def detections_for_ui(detections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         for d in detections
         if d.get("bbox") is not None
     ]
+
+
+def identities_for_ui(identities: List[Any]) -> List[Dict[str, Any]]:
+    """JSON-safe identity list for the REST / websocket payloads."""
+
+    return [identity.to_dict() for identity in identities or []]
+
+
+def summarize_identities(identities: List[Any]) -> Dict[str, Any]:
+    """Compact per-frame identity counts for the dashboard summary."""
+
+    verified = [i for i in identities or [] if getattr(i, "verified", False)]
+    return {
+        "faces_seen": len(identities or []),
+        "workers_verified": len(verified),
+        "verified_workers": sorted(
+            {
+                (i.worker_name or i.worker_id or "worker")
+                for i in verified
+            }
+        ),
+        "unknown_faces": len(identities or []) - len(verified),
+    }

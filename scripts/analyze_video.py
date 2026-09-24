@@ -150,12 +150,19 @@ def parse_args() -> argparse.Namespace:
                          help="Skip per-class confidence/size/aspect-ratio filtering entirely.")
 
     parser.add_argument("--skip-fire", action="store_true",
-                         help="Skip fire/smoke inference entirely (faster, hazard-only run).")
+                        help="Skip fire/smoke inference entirely (faster, hazard-only run).")
 
     parser.add_argument("--show-progress-every", type=int, default=30,
-                         help="Print a progress line every N frames.")
+                        help="Print a progress line every N frames.")
     parser.add_argument("--max-frames", type=int, default=None,
-                         help="Stop after N frames (useful for a quick first pass).")
+                        help="Stop after N frames (useful for a quick first pass).")
+
+    parser.add_argument("--face-recognition", action="store_true",
+                        help="Enable worker identification (Siamese face verification) "
+                             "on detected Person boxes; identities are drawn on the "
+                             "output video and written to the CSV.")
+    parser.add_argument("--face-frame-stride", type=int, default=1,
+                        help="Verify identities every Nth frame (default 1 = every frame).")
 
     return parser.parse_args()
 
@@ -273,6 +280,33 @@ def main() -> None:
         )
     )
 
+    face_service = None
+    if args.face_recognition:
+        try:
+            from src.face_recognition.config import FaceRecognitionConfig
+            from src.face_recognition.registry import WorkerRegistry
+            from src.face_recognition.service import FaceRecognitionService
+            from src.face_recognition import calibration as face_calibration
+            from src.face_recognition.backends import create_backend
+
+            face_config = FaceRecognitionConfig()
+            face_config.apply_calibration(face_calibration.load_calibration(face_config))
+            face_config.ensure_dirs()
+            face_registry = WorkerRegistry(face_config)
+            face_registry.auto_discover_workers()
+            face_service = FaceRecognitionService(
+                face_config, backend=create_backend(face_config), registry=face_registry
+            )
+            print(
+                f"Face recognition : ON  workers={face_registry.worker_ids()} "
+                f"thresholds=({face_config.detection_threshold:.2f}, "
+                f"{face_config.verification_threshold:.2f})"
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"WARNING: face recognition unavailable ({exc}) - continuing without.",
+                  file=sys.stderr)
+            face_service = None
+
     pipeline = SafetyPipeline(
         hazard_detector,
         fire_detector,
@@ -284,6 +318,8 @@ def main() -> None:
         zone_tracker=zone_tracker,
         track_confirmation=track_confirmation,
         fire_tracker=fire_tracker,
+        face_service=face_service,
+        face_frame_stride=args.face_frame_stride,
     )
 
     cap = cv2.VideoCapture(str(video_path))
@@ -311,6 +347,7 @@ def main() -> None:
         "max_raw_smoke_conf", "max_raw_smoke_area",
         "dropped_confidence", "dropped_area", "dropped_persistence",
         "confirmed_smoke", "confirmed_fire", "fire_model_ran",
+        "verified_workers", "unknown_faces",
     ])
 
     frame_index = 0
@@ -409,6 +446,11 @@ def main() -> None:
                 gate_stats.get("confirmed_smoke", 0),
                 gate_stats.get("confirmed_fire", 0),
                 int(fire_model_ran),
+                "|".join(sorted({
+                    (i.worker_name or i.worker_id or "worker")
+                    for i in fr.identities if i.verified
+                })),
+                sum(1 for i in fr.identities if not i.verified),
             ])
 
         except Exception as exc:  # noqa: BLE001

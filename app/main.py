@@ -63,7 +63,13 @@ from src.pipeline import (
     serialize_result,
     summarize_result,
     detections_for_ui,
+    identities_for_ui,
+    summarize_identities,
 )
+from src.face_recognition.config import FaceRecognitionConfig
+from src.face_recognition.registry import WorkerRegistry
+from src.face_recognition.service import FaceRecognitionService
+from src.face_recognition import calibration as face_calibration
 
 from app.settings import SETTINGS, RISK_ORDER
 from app.storage import init_db, get_db
@@ -166,6 +172,60 @@ logger.info("Models loaded successfully.")
 
 
 # ============================================================
+# FACE RECOGNITION / WORKER VERIFICATION (optional)
+# ============================================================
+# Loads the trained Siamese model ONCE and shares it across every
+# stream (REST image/video, websocket camera, CLI scripts receive it
+# via dependency injection). Any failure (missing TF, missing .h5,
+# unreadable registry) degrades gracefully: FACE_SERVICE becomes None
+# and the rest of the app runs exactly as before.
+
+def _build_face_service() -> Optional[FaceRecognitionService]:
+    """Build the shared face-recognition service, or None on failure."""
+
+    if not SETTINGS.face_recognition_enabled:
+        logger.info("Face recognition disabled (FACE_RECOGNITION_ENABLED=false).")
+        return None
+
+    try:
+        face_config = FaceRecognitionConfig()
+
+        # Calibrated thresholds (scripts/calibrate_threshold.py) win over
+        # the static env defaults when present.
+        face_config.apply_calibration(face_calibration.load_calibration(face_config))
+
+        face_config.ensure_dirs()
+        registry = WorkerRegistry(face_config)
+        # Pick up folders the user dropped into input_images/ by hand.
+        registry.auto_discover_workers()
+
+        from src.face_recognition.backends import create_backend
+
+        backend = create_backend(face_config)
+
+        service = FaceRecognitionService(face_config, backend=backend, registry=registry)
+        logger.info(
+            "Face recognition ready: backend=%s model=%s workers=%d "
+            "thresholds=(det=%.2f, ver=%.2f)",
+            SETTINGS.face_backend,
+            face_config.model_path,
+            len(registry.worker_ids()),
+            face_config.detection_threshold,
+            face_config.verification_threshold,
+        )
+        return service
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Face recognition NOT available (%s: %s) - continuing without "
+            "worker identification.", exc.__class__.__name__, exc,
+        )
+        return None
+
+
+FACE_SERVICE: Optional[FaceRecognitionService] = _build_face_service()
+
+
+# ============================================================
 # HELPERS
 # ============================================================
 
@@ -196,13 +256,19 @@ def _prune_old_outputs(directory: Path = OUTPUT_VIDEO_DIR, keep: int = MAX_OUTPU
             logger.debug("Could not prune %s: %s", stale, exc)
 
 
-def _build_payload(result: Dict[str, Any], detections: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _build_payload(
+    result: Dict[str, Any],
+    detections: List[Dict[str, Any]],
+    identities: Optional[List[Any]] = None,
+) -> Dict[str, Any]:
     """The stable JSON contract shared by the image and websocket endpoints."""
 
     return {
         **serialize_result(result),
         "summary": summarize_result(result),
         "detections": detections_for_ui(detections),
+        "identities": identities_for_ui(identities or []),
+        "identity_summary": summarize_identities(identities or []),
     }
 
 
@@ -235,6 +301,7 @@ async def detect_safety_image(file: UploadFile = File(...)):
         config=DEFAULT_SAFETY_CONFIG,
         enable_track_confirmation=False,
         enable_fire_confirmation=False,
+        face_service=FACE_SERVICE,
     )
 
     try:
@@ -258,7 +325,7 @@ async def detect_safety_image(file: UploadFile = File(...)):
     return {
         "success": True,
         "filename": file.filename,
-        "result": _build_payload(frame_result.result, frame_result.detections),
+        "result": _build_payload(frame_result.result, frame_result.detections, frame_result.identities),
         "annotated_image_path": str(output_path),
     }
 
@@ -388,7 +455,12 @@ async def detect_safety_video(file: UploadFile = File(...)):
 
     # One pipeline for the WHOLE video: track ids, zone ids, and
     # confirmation streaks stay coherent frame-to-frame within this job.
-    pipeline = SafetyPipeline(hazard_detector, fire_detector, config=DEFAULT_SAFETY_CONFIG)
+    pipeline = SafetyPipeline(
+        hazard_detector,
+        fire_detector,
+        config=DEFAULT_SAFETY_CONFIG,
+        face_service=FACE_SERVICE,
+    )
     monitor = _new_monitor("video")
 
     summary = await run_in_threadpool(_process_video_file, input_path, output_path, pipeline, monitor)
@@ -435,7 +507,13 @@ async def safety_camera_websocket(websocket: WebSocket):
     logger.info("Safety camera WebSocket connected")
 
     # Fresh pipeline PER CONNECTION - never shared across clients/streams.
-    pipeline = SafetyPipeline(hazard_detector, fire_detector, config=DEFAULT_SAFETY_CONFIG)
+    pipeline = SafetyPipeline(
+        hazard_detector,
+        fire_detector,
+        config=DEFAULT_SAFETY_CONFIG,
+        face_service=FACE_SERVICE,
+        face_frame_stride=SETTINGS.face_frame_stride,
+    )
     monitor = _new_monitor("camera")
 
     consecutive_failures = 0
@@ -519,7 +597,7 @@ async def safety_camera_websocket(websocket: WebSocket):
                 # this as the "done" signal to send the next frame.
                 await websocket.send_json({
                     "frame_done": True,
-                    **_build_payload(frame_result.result, frame_result.detections),
+                    **_build_payload(frame_result.result, frame_result.detections, frame_result.identities),
                 })
 
                 # Monitor runs in background - don't block the next frame.
@@ -562,6 +640,169 @@ async def safety_camera_websocket(websocket: WebSocket):
             await websocket.close()
         except Exception:  # noqa: BLE001
             pass
+
+
+# ============================================================
+# FACE / WORKER REGISTRY API
+# Register & manage worker identities and reference faces.
+# All endpoints degrade to 503 when face recognition is unavailable.
+# ============================================================
+
+def _face_service_or_error():
+    if FACE_SERVICE is None:
+        return None, JSONResponse(
+            status_code=503,
+            content={"success": False, "error": "Face recognition unavailable"
+                                              " (TensorFlow missing or model not found)"},
+        )
+    return FACE_SERVICE, None
+
+
+@app.get("/face/workers")
+def face_list_workers():
+    """All registered workers (including deactivated ones, flagged)."""
+
+    service, error = _face_service_or_error()
+    if error:
+        return error
+    workers = [w.to_dict() for w in service.registry.list_workers(active_only=False)]
+    return {"success": True, "workers": workers, "count": len(workers)}
+
+
+@app.post("/face/workers")
+async def face_register_worker(
+    worker_id: str,
+    name: str = "",
+    role: str = "",
+    files: Optional[List[UploadFile]] = File(None),
+):
+    """
+    Register a worker. Optionally attach reference face images
+    (multipart files[] - the SAME 250x250-style face crops the training
+    webcam flow produced). At least one reference image is required
+    before the worker can be verified.
+    """
+
+    service, error = _face_service_or_error()
+    if error:
+        return error
+
+    added = 0
+    for upload in files or []:
+        contents = await upload.read()
+        image = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
+        if image is None:
+            logger.warning("Registration upload not a valid image: %s", upload.filename)
+            continue
+        if service.registry.add_reference_image(worker_id, image, filename=upload.filename):
+            added += 1
+
+    record = service.registry.get_worker(worker_id)
+    if record is None:
+        return {"success": False, "error": "Worker could not be registered"}
+
+    return {
+        "success": True,
+        "worker": record.to_dict(),
+        "images_added": added,
+        "n_references": len(record.reference_images),
+    }
+
+
+@app.post("/face/workers/{worker_id}/images")
+async def face_add_worker_images(worker_id: str, files: List[UploadFile] = File(...)):
+    """Add more reference faces to an existing worker (improves accuracy)."""
+
+    service, error = _face_service_or_error()
+    if error:
+        return error
+    if service.registry.get_worker(worker_id) is None:
+        return {"success": False, "error": f"Unknown worker: {worker_id}"}
+
+    added = 0
+    for upload in files:
+        contents = await upload.read()
+        image = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
+        if image is not None and service.registry.add_reference_image(
+            worker_id, image, filename=upload.filename
+        ):
+            added += 1
+
+    record = service.registry.get_worker(worker_id)
+    return {"success": True, "images_added": added, "worker": record.to_dict()}
+
+
+@app.delete("/face/workers/{worker_id}")
+def face_remove_worker(worker_id: str, delete_images: bool = False):
+    """Deactivate a worker (or purge with delete_images=true)."""
+
+    service, error = _face_service_or_error()
+    if error:
+        return error
+    removed = service.remove_worker(worker_id, delete_images=delete_images)
+    return {"success": removed, "worker_id": worker_id, "purged": bool(delete_images)}
+
+
+@app.post("/face/verify")
+async def face_verify_image(file: UploadFile = File(...)):
+    """
+    Standalone verification endpoint: upload an image containing face(s),
+    get the recognized worker(s) back. Uses the hazard model to find
+    persons, then the Siamese verifier on each face crop.
+    """
+
+    service, error = _face_service_or_error()
+    if error:
+        return error
+
+    contents = await file.read()
+    image = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        return {"success": False, "error": "Invalid image"}
+
+    try:
+        detections = await run_in_threadpool(hazard_detector.predict, image)
+        persons = hazard_detector.extract_persons(detections)
+        identities = await run_in_threadpool(service.identify_faces, image, persons)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Face verify endpoint failed")
+        return {"success": False, "error": str(exc)}
+
+    return {
+        "success": True,
+        "filename": file.filename,
+        "faces": [i.to_dict() for i in identities],
+        "verified_workers": [
+            {"worker_id": i.worker_id, "worker_name": i.worker_name, "score": round(i.score, 4)}
+            for i in identities if i.verified
+        ],
+    }
+
+
+@app.post("/face/calibrate")
+def face_calibrate():
+    """
+    Recalibrate verification thresholds from the current registered
+    workers and persist them to calibration.json (picked up on the next
+    restart, or immediately for CLI runs).
+    """
+
+    service, error = _face_service_or_error()
+    if error:
+        return error
+
+    try:
+        result = face_calibration.calibrate_threshold(
+            service.backend,
+            service.registry,
+            input_size=service.config.input_size,
+        )
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+
+    face_calibration.save_calibration(service.config, result)
+    service.config.apply_calibration(result)
+    return {"success": True, "calibration": result}
 
 
 # ============================================================
@@ -670,5 +911,39 @@ if SETTINGS.evidence_dir.exists():
 OUTPUT_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/output", StaticFiles(directory=str(OUTPUT_VIDEO_DIR)), name="output")
 
-if FRONTEND_DIR.exists():
+# Frontend: prefer the built TanStack Start bundle (frontend/.output/public);
+# fall back to legacy static files in frontend/ root for older checkouts.
+# The SPA build (`bun run build:spa` in frontend/) emits a client-only shell as
+# _shell.html (or index.html on some Nitro versions) — use whichever exists.
+_BUILT_FRONTEND = FRONTEND_DIR / ".output" / "public"
+
+if _BUILT_FRONTEND.exists():
+    _SPA_SHELL = next(
+        (
+            _BUILT_FRONTEND / _name
+            for _name in ("index.html", "_shell.html")
+            if (_BUILT_FRONTEND / _name).is_file()
+        ),
+        _BUILT_FRONTEND / "_shell.html",
+    )
+    app.mount("/assets", StaticFiles(directory=str(_BUILT_FRONTEND / "assets")), name="frontend-assets")
+
+    @app.get("/", include_in_schema=False)
+    async def _spa_index() -> FileResponse:
+        return FileResponse(_SPA_SHELL)
+
+    @app.get("/{spa_path:path}", include_in_schema=False)
+    async def _spa_fallback(spa_path: str) -> FileResponse:
+        """SPA history fallback: serve known static files, otherwise the SPA
+        shell so client-side routes (/monitor, /workers, ...) work on hard refresh."""
+
+        candidate = (_BUILT_FRONTEND / spa_path).resolve()
+        try:
+            candidate.relative_to(_BUILT_FRONTEND.resolve())
+        except ValueError:  # path traversal attempt
+            candidate = _SPA_SHELL
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_SPA_SHELL)
+elif FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="static")
