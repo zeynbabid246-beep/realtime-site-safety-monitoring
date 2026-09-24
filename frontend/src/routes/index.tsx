@@ -4,10 +4,13 @@ import {
   ArrowRight,
   Cone,
   Cpu,
+  FileImage,
+  FileVideo,
   Flame,
   HardHat,
   ScanFace,
   ShieldCheck,
+  UploadCloud,
   Users,
   Video,
 } from "lucide-react";
@@ -356,43 +359,64 @@ function DashboardPage() {
         </SectionCard>
       </div>
 
-      {/* Quick actions */}
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        {[
-          {
-            to: "/monitor",
-            label: "Start monitoring",
-            detail: "Webcam through the full AI pipeline",
-            icon: Video,
-          },
-          {
-            to: "/workers",
-            label: "Register a worker",
-            detail: "Faces used for live verification",
-            icon: ScanFace,
-          },
-          {
-            to: "/history",
-            label: "Review incidents",
-            detail: "Filter events and acknowledge alerts",
-            icon: ArrowRight,
-          },
-        ].map((action) => (
+      {/* Quick detection hub */}
+      <div className="mt-4 rounded-xl border bg-card p-4 sm:p-5 shadow-xs">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-display text-sm font-bold flex items-center gap-2">
+              <UploadCloud className="size-4 text-primary" /> AI Detection Hub
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Launch live stream monitoring, analyze a recorded video clip, or upload a site image for instant AI safety verification.
+            </p>
+          </div>
+          <Button asChild size="sm">
+            <Link to="/monitor">
+              Open Detection Center →
+            </Link>
+          </Button>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <Link
-            key={action.to}
-            to={action.to}
-            className="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-accent"
+            to="/monitor"
+            className="group flex items-center gap-3 rounded-lg border bg-muted/40 p-3.5 transition-colors hover:border-primary/40 hover:bg-accent"
           >
             <span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary">
-              <action.icon className="size-4.5" />
+              <Video className="size-4.5" />
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold">{action.label}</span>
-              <span className="block truncate text-xs text-muted-foreground">{action.detail}</span>
-            </span>
-            <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-foreground">Live Camera Feed</p>
+              <p className="text-[11px] text-muted-foreground truncate">Real-time WebSocket stream</p>
+            </div>
           </Link>
-        ))}
+
+          <Link
+            to="/monitor"
+            className="group flex items-center gap-3 rounded-lg border bg-muted/40 p-3.5 transition-colors hover:border-primary/40 hover:bg-accent"
+          >
+            <span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary">
+              <FileVideo className="size-4.5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-foreground">Analyze Video Clip</p>
+              <p className="text-[11px] text-muted-foreground truncate">Process MP4/MOV footage</p>
+            </div>
+          </Link>
+
+          <Link
+            to="/monitor"
+            className="group flex items-center gap-3 rounded-lg border bg-muted/40 p-3.5 transition-colors hover:border-primary/40 hover:bg-accent"
+          >
+            <span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary">
+              <FileImage className="size-4.5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-foreground">Detect in Image</p>
+              <p className="text-[11px] text-muted-foreground truncate">Upload JPEG/PNG image</p>
+            </div>
+          </Link>
+        </div>
       </div>
     </div>
   );

@@ -3,20 +3,26 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   CalendarClock,
+  CheckCircle2,
   FileImage,
   Images,
   Loader2,
+  RotateCcw,
   ScanFace,
   Search,
+  Sliders,
   Trash2,
+  UploadCloud,
+  UserCheck,
   UserPlus,
   UserRoundCheck,
   UserRoundX,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { StatusBadge } from "@/components/status-badge";
+import { IdentityBadge, StatusBadge } from "@/components/status-badge";
 import { EmptyState, ErrorState, LoadingCard, SectionCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -27,16 +33,24 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { addWorkerImages, listWorkers, registerWorker, removeWorker } from "@/lib/api";
-import type { WorkerRecord } from "@/lib/types";
+import {
+  addWorkerImages,
+  calibrateThresholds,
+  listWorkers,
+  registerWorker,
+  removeWorker,
+  verifyFaceImage,
+} from "@/lib/api";
+import type { CalibrationResult, FaceVerifyResponse, WorkerRecord } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/workers")({
   head: () => ({
     meta: [
-      { title: "Workers | SentinelOps" },
+      { title: "Workers & Verification | SentinelOps" },
       {
         name: "description",
-        content: "Manage registered workers and their reference face images for live verification.",
+        content: "Manage registered workers, test face verification, and calibrate Siamese recognition thresholds.",
       },
     ],
   }),
@@ -107,13 +121,13 @@ function WorkerCard({
       </dl>
 
       {worker.reference_images.length > 0 ? (
-        <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <Images className="size-3.5" />
-          stored under data/face_data/input_images/{worker.worker_id}/
+        <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground truncate">
+          <Images className="size-3.5 shrink-0" />
+          {worker.reference_images.length} reference crops attached
         </p>
       ) : (
         <p className="mt-3 rounded-md bg-medium/10 px-2.5 py-1.5 text-[11px] text-medium">
-          No reference faces yet — this worker cannot be verified on camera.
+          No reference faces yet — worker cannot be verified on camera.
         </p>
       )}
 
@@ -160,6 +174,16 @@ function WorkersPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Face Verification Tool State
+  const [verifyFile, setVerifyFile] = useState<File | null>(null);
+  const [verifyResult, setVerifyResult] = useState<FaceVerifyResponse | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  // Calibration Tool State
+  const [calibrationData, setCalibrationData] = useState<CalibrationResult | null>(null);
+  const [calibrationOpen, setCalibrationOpen] = useState(false);
+
   const workersQuery = useQuery({ queryKey: ["workers"], queryFn: listWorkers, retry: 1 });
 
   const invalidate = () => {
@@ -193,6 +217,31 @@ function WorkersPage() {
       invalidate();
     },
   });
+
+  const calibrateMutation = useMutation({
+    mutationFn: calibrateThresholds,
+    onSuccess: (data) => {
+      if (data.calibration) {
+        setCalibrationData(data.calibration);
+        setCalibrationOpen(true);
+      }
+    },
+  });
+
+  const handleVerifySubmit = async (file: File) => {
+    setVerifyFile(file);
+    setIsVerifying(true);
+    setVerifyError(null);
+    setVerifyResult(null);
+    try {
+      const res = await verifyFaceImage(file);
+      setVerifyResult(res);
+    } catch (err: unknown) {
+      setVerifyError(err instanceof Error ? err.message : "Verification failed");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const workers = workersQuery.data?.workers ?? [];
   const filtered = workers
@@ -228,15 +277,93 @@ function WorkersPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Face recognition"
-        title="Worker management"
-        description="Registered workers are verified live on camera by the Siamese model. Each worker needs 5–10 reference face crops for reliable verification."
+        eyebrow="Face recognition & registry"
+        title="Worker identity management"
+        description="Registered workers are verified live on camera by the Siamese deep learning model. Manage reference faces, test face identification, and recalibrate model decision thresholds."
         actions={
-          <Button onClick={() => setRegisterOpen(true)}>
-            <UserPlus className="size-4" /> Register worker
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              disabled={calibrateMutation.isPending}
+              onClick={() => calibrateMutation.mutate()}
+            >
+              {calibrateMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Sliders className="size-4" />
+              )}
+              Calibrate Thresholds
+            </Button>
+            <Button onClick={() => setRegisterOpen(true)}>
+              <UserPlus className="size-4" /> Register worker
+            </Button>
+          </div>
         }
       />
+
+      {/* Face Verification Test Card */}
+      <SectionCard
+        title="Live Face Verification Tester"
+        description="Upload a worker photo to test the Siamese face identification service against registered workers."
+        className="mb-6"
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <DropzoneSmall
+              label="Upload test photo for face verification"
+              sublabel="Select an image containing worker faces"
+              onFileSelect={handleVerifySubmit}
+            />
+          </div>
+
+          <div>
+            {isVerifying ? (
+              <div className="py-8 text-center text-xs text-muted-foreground">
+                <Loader2 className="mx-auto size-6 animate-spin text-primary" />
+                <p className="mt-2 font-semibold">Running face detection & Siamese matching…</p>
+              </div>
+            ) : verifyError ? (
+              <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+                <p className="font-semibold">Verification Error:</p>
+                <p className="mt-0.5">{verifyError}</p>
+              </div>
+            ) : verifyResult ? (
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <span className="font-semibold">Detected Faces: {verifyResult.faces?.length ?? 0}</span>
+                  <span className="text-safe font-semibold">
+                    Verified: {verifyResult.verified_workers?.length ?? 0}
+                  </span>
+                </div>
+
+                {verifyResult.faces && verifyResult.faces.length > 0 ? (
+                  <ul className="space-y-2">
+                    {verifyResult.faces.map((face, idx) => (
+                      <li key={idx} className="flex items-center justify-between rounded border p-2 bg-card">
+                        <div className="min-w-0">
+                          <p className="font-semibold truncate">
+                            {face.verified ? face.worker_name || face.worker_id : "Unrecognized Face"}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            Match Score: {(face.score * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                        <IdentityBadge verified={face.verified} />
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted-foreground">No faces detected in this image.</p>
+                )}
+              </div>
+            ) : (
+              <p className="py-6 text-center text-xs text-muted-foreground">
+                Upload a photo on the left to see instant face identification results.
+              </p>
+            )}
+          </div>
+        </div>
+      </SectionCard>
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -310,15 +437,56 @@ function WorkersPage() {
         </div>
       )}
 
+      {/* Calibration Dialog */}
+      <Dialog open={calibrationOpen} onOpenChange={setCalibrationOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sliders className="size-4 text-primary" /> Threshold Calibration Complete
+            </DialogTitle>
+            <DialogDescription>
+              Recalibrated verification thresholds based on current registered worker reference pairs.
+            </DialogDescription>
+          </DialogHeader>
+          {calibrationData ? (
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-muted p-2.5">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Detection Threshold</p>
+                  <p className="text-base font-bold font-display text-primary">
+                    {calibrationData.suggested_detection_threshold.toFixed(2)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted p-2.5">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Verification Threshold</p>
+                  <p className="text-base font-bold font-display text-primary">
+                    {calibrationData.suggested_verification_threshold.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3 space-y-1">
+                <p className="font-semibold text-foreground">Performance Metrics:</p>
+                <p>True Accept Rate (TAR): <strong>{(calibrationData.true_accept_rate_at_suggestion * 100).toFixed(1)}%</strong></p>
+                <p>False Accept Rate (FAR): <strong>{(calibrationData.false_accept_rate_at_suggestion * 100).toFixed(1)}%</strong></p>
+                <p>Genuine pairs checked: {calibrationData.n_genuine_pairs}</p>
+                <p>Impostor pairs checked: {calibrationData.n_impostor_pairs}</p>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button onClick={() => setCalibrationOpen(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Register dialog */}
       <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Register a worker</DialogTitle>
             <DialogDescription>
-              The worker id becomes the folder{" "}
-              <code className="text-[11px]">data/face_data/input_images/&lt;id&gt;/</code>.
-              Reference faces are saved there and used for live verification.
+              Reference faces are saved and used for live verification.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleRegisterSubmit} className="space-y-4">
@@ -413,8 +581,7 @@ function WorkersPage() {
           <DialogHeader>
             <DialogTitle>Remove worker</DialogTitle>
             <DialogDescription>
-              Deactivating keeps the data but the worker will no longer be verified on camera.
-              Purging permanently deletes their reference images.
+              Deactivating keeps data; purging permanently deletes reference images.
             </DialogDescription>
           </DialogHeader>
           {removeTarget ? (
@@ -464,16 +631,42 @@ function WorkersPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
 
-      {/* Hidden busy indicator for inline image adds */}
-      {addImagesMutation.isPending ? (
-        <div
-          className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg border bg-card px-4 py-2.5 text-sm shadow-lg"
-          role="status"
-        >
-          <Loader2 className="size-4 animate-spin text-primary" /> Uploading reference faces…
-        </div>
-      ) : null}
+function DropzoneSmall({
+  label,
+  sublabel,
+  onFileSelect,
+}: {
+  label: string;
+  sublabel: string;
+  onFileSelect: (file: File) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length > 0) onFileSelect(files[0]!);
+  };
+
+  return (
+    <div
+      onClick={() => fileInputRef.current?.click()}
+      className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors border-border hover:border-primary/50 hover:bg-accent/50"
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        hidden
+        onChange={handleChange}
+        aria-label={label}
+      />
+      <UploadCloud className="size-5 text-primary" />
+      <p className="mt-1 font-display text-xs font-semibold">{label}</p>
+      <p className="text-[10px] text-muted-foreground">{sublabel}</p>
     </div>
   );
 }

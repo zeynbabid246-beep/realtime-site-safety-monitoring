@@ -2,19 +2,30 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { CalendarDays, Download, FileSpreadsheet, Loader2, TrendingUp } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { PageHeader } from "@/components/page-header";
 import { RiskBadge } from "@/components/status-badge";
 import { EmptyState, ErrorState, LoadingCard, SectionCard, StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
-import { downloadReport, getReport, formatEventTime } from "@/lib/api";
-import { RISK_LEVELS, type ReportRange } from "@/lib/types";
+import { downloadReport, formatEventTime, getReport } from "@/lib/api";
+import { RISK_LEVELS, type ReportRange, type RiskLevel } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
     meta: [
       { title: "Reports | SentinelOps" },
-      { name: "description", content: "Aggregated safety reports and CSV / JSON exports." },
+      { name: "description", content: "Aggregated safety reports, charts, and CSV / JSON exports." },
     ],
   }),
   component: ReportsPage,
@@ -27,6 +38,14 @@ const RANGES: Array<{ key: ReportRange; label: string }> = [
   { key: "all", label: "All time" },
 ];
 
+const RISK_COLORS: Record<RiskLevel, string> = {
+  SAFE: "#16a34a",
+  LOW: "#0284c7",
+  MEDIUM: "#d97706",
+  HIGH: "#ea580c",
+  CRITICAL: "#dc2626",
+};
+
 function ReportsPage() {
   const [range, setRange] = useState<ReportRange>("24h");
   const [exporting, setExporting] = useState<"csv" | "json" | null>(null);
@@ -35,9 +54,24 @@ function ReportsPage() {
 
   const data = report.data;
   const totals = data?.totals;
-  const byType = Object.entries(data?.by_violation_type ?? {});
-  const maxTypeCount = byType[0]?.[1] ?? 0;
+  const byTypeEntries = Object.entries(data?.by_violation_type ?? {});
   const byDayEntries = Object.entries(data?.by_day ?? {});
+
+  const pieData = RISK_LEVELS.map((level) => ({
+    name: level,
+    value: data?.by_risk[level] ?? 0,
+    color: RISK_COLORS[level],
+  })).filter((item) => item.value > 0);
+
+  const barData = byTypeEntries.map(([type, count]) => ({
+    name: type.replaceAll("_", " "),
+    count,
+  }));
+
+  const timelineData = byDayEntries.map(([day, count]) => ({
+    day: day.slice(5),
+    events: count,
+  }));
 
   const handleDownload = async (format: "csv" | "json") => {
     setExporting(format);
@@ -59,8 +93,8 @@ function ReportsPage() {
     <div>
       <PageHeader
         eyebrow="Safety intelligence"
-        title="Performance reports"
-        description="Aggregates computed by the backend over the recorded event and alert history."
+        title="Performance reports & analytics"
+        description="Interactive visual analytics computed over recorded events, alerts, and safety violations."
         actions={
           <>
             <Button
@@ -160,9 +194,9 @@ function ReportsPage() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            {/* Risk breakdown */}
-            <SectionCard title="Risk breakdown" description="Events by risk level in range">
-              {byDayEntries.length === 0 && (totals?.events ?? 0) === 0 ? (
+            {/* Risk breakdown chart */}
+            <SectionCard title="Risk distribution" description="Events categorized by risk level in range">
+              {pieData.length === 0 ? (
                 <EmptyState
                   icon={TrendingUp}
                   title="No events in this range"
@@ -170,45 +204,63 @@ function ReportsPage() {
                   className="border-0 py-6"
                 />
               ) : (
-                <ul className="space-y-2.5">
-                  {RISK_LEVELS.map((level) => {
-                    const count = data.by_risk[level] ?? 0;
-                    const total = RISK_LEVELS.reduce(
-                      (sum, key) => sum + (data.by_risk[key] ?? 0),
-                      0,
-                    );
-                    return (
-                      <li key={level} className="flex items-center gap-3">
-                        <RiskBadge level={level} size="sm" className="w-24 justify-center" />
-                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className={cn(
-                              "h-full rounded-full",
-                              level === "SAFE" && "bg-safe",
-                              level === "LOW" && "bg-low",
-                              level === "MEDIUM" && "bg-medium",
-                              level === "HIGH" && "bg-high",
-                              level === "CRITICAL" && "bg-critical",
-                            )}
-                            style={{ width: `${total ? (count / total) * 100 : 0}%` }}
-                          />
-                        </div>
-                        <span className="w-10 text-right font-display text-sm font-semibold">
-                          {count}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="flex flex-col items-center sm:flex-row sm:justify-around">
+                  <div className="h-52 w-52 shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={75}
+                          paddingAngle={3}
+                        >
+                          {pieData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "var(--color-card)",
+                            borderColor: "var(--color-border)",
+                            borderRadius: "0.5rem",
+                            fontSize: "12px",
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <ul className="mt-4 sm:mt-0 space-y-2 w-full max-w-xs">
+                    {RISK_LEVELS.map((level) => {
+                      const count = data.by_risk[level] ?? 0;
+                      return (
+                        <li key={level} className="flex items-center justify-between text-xs">
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="size-2.5 rounded-full"
+                              style={{ backgroundColor: RISK_COLORS[level] }}
+                            />
+                            <span className="font-medium text-foreground">{level}</span>
+                          </span>
+                          <span className="font-display font-semibold">{count}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               )}
             </SectionCard>
 
-            {/* Violation types */}
+            {/* Violation types chart */}
             <SectionCard
-              title="Violation types"
-              description="Cumulative counts across recorded events"
+              title="Violation types breakdown"
+              description="Cumulative counts across recorded safety events"
             >
-              {byType.length === 0 ? (
+              {barData.length === 0 ? (
                 <EmptyState
                   icon={TrendingUp}
                   title="No violations recorded"
@@ -216,48 +268,48 @@ function ReportsPage() {
                   className="border-0 py-6"
                 />
               ) : (
-                <ul className="space-y-3">
-                  {byType.map(([type, count]) => (
-                    <li key={type}>
-                      <div className="mb-1 flex justify-between text-xs">
-                        <span className="font-medium">{type.replaceAll("_", " ")}</span>
-                        <span className="font-semibold">{count}</span>
-                      </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${maxTypeCount ? (count / maxTypeCount) * 100 : 0}%` }}
-                        />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={barData} layout="vertical" margin={{ left: 20, right: 20, top: 10, bottom: 10 }}>
+                      <XAxis type="number" tick={{ fontSize: 11 }} />
+                      <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "var(--color-card)",
+                          borderColor: "var(--color-border)",
+                          borderRadius: "0.5rem",
+                          fontSize: "12px",
+                        }}
+                      />
+                      <Bar dataKey="count" fill="var(--color-primary)" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               )}
             </SectionCard>
           </div>
 
           {/* Daily timeline */}
-          <SectionCard title="Daily timeline" description="Events per day">
-            {byDayEntries.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No data in this range.</p>
+          <SectionCard title="Daily event timeline" description="Safety events recorded per day">
+            {timelineData.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No daily data available in this range.</p>
             ) : (
-              <div className="flex h-32 items-end gap-1.5 overflow-x-auto pb-1">
-                {byDayEntries.map(([day, count]) => {
-                  const max = Math.max(...byDayEntries.map(([, value]) => value), 1);
-                  return (
-                    <div
-                      key={day}
-                      className="flex min-w-8 flex-1 flex-col items-center gap-1"
-                      title={`${day}: ${count}`}
-                    >
-                      <div
-                        className="w-full rounded-t bg-primary/80"
-                        style={{ height: `${Math.max((count / max) * 100, 4)}%` }}
-                      />
-                      <span className="text-[9px] text-muted-foreground">{day.slice(5)}</span>
-                    </div>
-                  );
-                })}
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={timelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "var(--color-card)",
+                        borderColor: "var(--color-border)",
+                        borderRadius: "0.5rem",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Bar dataKey="events" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             )}
           </SectionCard>

@@ -121,6 +121,10 @@ export function acknowledgeAlert(alertId: number): Promise<{ success: boolean; i
   return request(`/api/alerts/${alertId}/ack`, { method: "POST" });
 }
 
+export function acknowledgeAllAlerts(): Promise<{ success: boolean; acknowledged_count: number }> {
+  return request("/api/alerts/ack-all", { method: "POST" });
+}
+
 /* ------------------------------------------------------------------ */
 /* Statistics / reports                                                */
 /* ------------------------------------------------------------------ */
@@ -210,13 +214,49 @@ export function calibrateThresholds(): Promise<CalibrateResponse> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Image detection (full safety pipeline on one upload)                */
+/* Image & Video detection                                             */
 /* ------------------------------------------------------------------ */
 
 export async function detectImage(file: File): Promise<ImageDetectResponse> {
   const form = new FormData();
   form.append("file", file);
   return request<ImageDetectResponse>("/safety/detect/image", { method: "POST", body: form });
+}
+
+export interface VideoDetectResult {
+  videoUrl: string;
+  framesProcessed: number;
+  framesFailed: number;
+  maxRiskLevel: string;
+}
+
+export async function detectVideo(file: File): Promise<VideoDetectResult> {
+  const form = new FormData();
+  form.append("file", file);
+
+  const response = await fetch(`${getApiBase()}/safety/detect/video`, {
+    method: "POST",
+    body: form,
+  });
+
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (body.error) detail = body.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+
+  const blob = await response.blob();
+  const videoUrl = URL.createObjectURL(blob);
+  const framesProcessed = parseInt(response.headers.get("X-Frames-Processed") || "0", 10);
+  const framesFailed = parseInt(response.headers.get("X-Frames-Failed") || "0", 10);
+  const maxRiskLevel = response.headers.get("X-Max-Risk-Level") || "SAFE";
+
+  return { videoUrl, framesProcessed, framesFailed, maxRiskLevel };
 }
 
 /* ------------------------------------------------------------------ */
