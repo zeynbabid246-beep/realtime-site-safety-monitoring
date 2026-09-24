@@ -2,11 +2,16 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
+  Cctv,
   Cone,
   Cpu,
+  FileVideo,
   Flame,
   HardHat,
+  ImageIcon,
+  Radar,
   ScanFace,
+  ShieldAlert,
   ShieldCheck,
   Users,
   Video,
@@ -39,7 +44,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "AI-powered construction safety monitoring: PPE, zones, proximity, fire, and worker verification.",
+          "AI-powered construction site safety monitoring platform: PPE, danger zones, proximity, fire, and worker verification.",
       },
     ],
   }),
@@ -70,7 +75,7 @@ function RiskMix({ byRisk }: { byRisk: Record<RiskLevel, number> }) {
           return (
             <div
               key={level}
-              className={cn("h-full", RISK_BG[level])}
+              className={cn("h-full transition-all duration-300", RISK_BG[level])}
               style={{ width: `${(value / Math.max(total, 1)) * 100}%` }}
               title={`${level}: ${value}`}
             />
@@ -117,26 +122,26 @@ function DashboardPage() {
   const events = recentEvents.data?.events ?? [];
 
   const backendOnline = health.isSuccess;
-  // /face/workers answers 200 only when the recognition layer is loaded;
-  // 503 (face unavailable) surfaces here as an error state.
   const faceOnline = workers.isSuccess;
 
   return (
     <div>
       <PageHeader
-        eyebrow="Construction safety platform"
-        title="Site safety dashboard"
-        description="Live overview of detections, PPE compliance, worker verification, and incidents across the monitoring pipeline."
+        eyebrow="Construction Safety AI Platform"
+        title="Site Safety Operations Center"
+        description="Live overview of real-time webcam detections, image & video inspections, PPE compliance, danger zone proximity, and worker identification."
         actions={
-          <Button asChild>
-            <Link to="/monitor">
-              <Video className="size-4" /> Open live monitor
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild>
+              <Link to="/monitor">
+                <Cctv className="size-4" /> Open Detection Studio
+              </Link>
+            </Button>
+          </div>
         }
       />
 
-      {/* System status */}
+      {/* System status strip */}
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
         <span
           className={cn(
@@ -152,7 +157,7 @@ function DashboardPage() {
               backendOnline ? "bg-safe status-pulse" : "bg-critical",
             )}
           />
-          Safety API {backendOnline ? `v${health.data?.version ?? "?"} online` : "offline"}
+          Safety Core Engine {backendOnline ? `v${health.data?.version ?? "?"} online` : "offline"}
         </span>
         <span
           className={cn(
@@ -164,8 +169,11 @@ function DashboardPage() {
         >
           <ScanFace className="size-3.5" />
           {faceOnline
-            ? `Face recognition online · ${activeWorkers.length} worker${activeWorkers.length === 1 ? "" : "s"}`
+            ? `Siamese Face Verifier Online · ${activeWorkers.length} active worker${activeWorkers.length === 1 ? "" : "s"}`
             : "Face recognition unavailable"}
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary ring-1 ring-inset ring-primary/30 px-2.5 py-1 font-semibold">
+          <Radar className="size-3.5" /> YOLO Hazard & Fire Models Loaded
         </span>
       </div>
 
@@ -182,54 +190,103 @@ function DashboardPage() {
           <StatCard
             label="Events · 24h"
             value={totals?.events ?? 0}
-            detail={`${totals?.frames_processed ?? 0} frames processed`}
+            detail={`${totals?.frames_processed ?? 0} total frames processed`}
             icon={ShieldCheck}
             tone="info"
           />
           <StatCard
-            label="Active alerts"
+            label="Active Alerts"
             value={totals?.alerts_unacknowledged ?? 0}
-            detail={`${totals?.alerts ?? 0} alerts total`}
+            detail={`${totals?.alerts ?? 0} alerts recorded total`}
             icon={Flame}
             tone={(totals?.alerts_unacknowledged ?? 0) > 0 ? "warning" : "success"}
           />
           <StatCard
-            label="Critical events"
+            label="Critical Incidents"
             value={report24h.data?.by_risk.CRITICAL ?? 0}
-            detail="Highest severity in period"
+            detail="Highest risk severity in 24h"
             icon={HardHat}
             tone={(report24h.data?.by_risk.CRITICAL ?? 0) > 0 ? "danger" : "success"}
           />
           <StatCard
-            label="Registered workers"
+            label="Registered Workers"
             value={activeWorkers.length}
-            detail={`${(workers.data?.workers.length ?? 0) - activeWorkers.length} inactive`}
+            detail={`${(workers.data?.workers.length ?? 0) - activeWorkers.length} deactivated`}
             icon={Users}
             tone="success"
           />
         </div>
       )}
 
+      {/* Studio Quick Launcher */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          {
+            to: "/monitor",
+            label: "Live Camera Stream",
+            detail: "Webcam live feed with real-time detection",
+            icon: Cctv,
+            color: "text-primary bg-primary/10",
+          },
+          {
+            to: "/monitor",
+            label: "Image Hazard Inspection",
+            detail: "Upload single photo for full safety pass",
+            icon: ImageIcon,
+            color: "text-safe bg-safe/10",
+          },
+          {
+            to: "/monitor",
+            label: "Video Recording Processing",
+            detail: "Batch video processing & annotated MP4",
+            icon: FileVideo,
+            color: "text-medium bg-medium/10",
+          },
+          {
+            to: "/workers",
+            label: "Worker Identity Portal",
+            detail: "Manage identities & reference face images",
+            icon: ScanFace,
+            color: "text-info bg-info/10",
+          },
+        ].map((action, idx) => (
+          <Link
+            key={idx}
+            to={action.to}
+            className="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:border-primary/40 hover:bg-accent/50 shadow-sm"
+          >
+            <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg font-bold", action.color)}>
+              <action.icon className="size-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground">{action.label}</span>
+              <span className="block truncate text-xs text-muted-foreground">{action.detail}</span>
+            </span>
+            <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
+          </Link>
+        ))}
+      </div>
+
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         {/* Risk mix */}
         <SectionCard
-          title="Risk distribution"
+          title="Risk Distribution"
           description="Events by risk level over the last 24 hours"
           action={
             <Link to="/reports" className="text-xs font-semibold text-primary hover:underline">
-              Reports →
+              Full Analytics →
             </Link>
           }
         >
           {byRisk ? (
             <RiskMix byRisk={byRisk} />
           ) : (
-            <p className="text-xs text-muted-foreground">Loading…</p>
+            <p className="text-xs text-muted-foreground">Loading risk metrics…</p>
           )}
         </SectionCard>
 
         {/* Violation types */}
-        <SectionCard title="Top violations" description="24-hour totals by violation type">
+        <SectionCard title="Top Violations" description="24-hour totals by violation type">
           {topViolationTypes.length > 0 ? (
             <ul className="space-y-3">
               {topViolationTypes.map(([type, count]) => {
@@ -242,7 +299,7 @@ function DashboardPage() {
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                       <div
-                        className="h-full rounded-full bg-primary"
+                        className="h-full rounded-full bg-primary transition-all duration-300"
                         style={{ width: `${(count / Math.max(max, 1)) * 100}%` }}
                       />
                     </div>
@@ -260,13 +317,13 @@ function DashboardPage() {
           )}
         </SectionCard>
 
-        {/* Face recognition status */}
+        {/* Worker Verification */}
         <SectionCard
-          title="Worker verification"
-          description="Registered identities for live recognition"
+          title="Worker Identification"
+          description="Active registered identities for live verification"
           action={
             <Link to="/workers" className="text-xs font-semibold text-primary hover:underline">
-              Manage →
+              Manage Workers →
             </Link>
           }
         >
@@ -308,16 +365,16 @@ function DashboardPage() {
       {/* Recent events */}
       <div className="mt-4">
         <SectionCard
-          title="Recent events"
-          description="Latest frames that produced recorded safety events"
+          title="Recent Detection Events"
+          description="Latest frames that triggered recorded safety incidents"
           action={
             <Link to="/history" className="text-xs font-semibold text-primary hover:underline">
-              Full history →
+              View History & Alerts →
             </Link>
           }
         >
           {recentEvents.isLoading ? (
-            <p className="text-xs text-muted-foreground">Loading events…</p>
+            <p className="text-xs text-muted-foreground">Loading recent events…</p>
           ) : recentEvents.isError ? (
             <ErrorState
               message="Could not load the event history."
@@ -326,8 +383,8 @@ function DashboardPage() {
           ) : events.length === 0 ? (
             <EmptyState
               icon={Cpu}
-              title="No events yet"
-              description="Start the live monitor — events are recorded whenever the engine flags a risk above LOW."
+              title="No events recorded yet"
+              description="Start the live camera or upload a video to record safety events."
             />
           ) : (
             <ul className="divide-y">
@@ -337,62 +394,23 @@ function DashboardPage() {
                   className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm"
                 >
                   <RiskBadge level={event.risk_level} size="sm" />
-                  <span className="font-medium">
+                  <span className="font-semibold">
                     {event.violation_count} violation{event.violation_count === 1 ? "" : "s"}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {Object.keys(event.violation_counts).slice(0, 3).join(" · ") || "—"}
+                    {Object.keys(event.violation_counts).slice(0, 3).join(" · ") || "Standard inspection"}
                   </span>
                   <span
                     className="ml-auto text-xs text-muted-foreground"
                     title={formatEventTime(event.ts)}
                   >
-                    {event.source} · {relativeTime(event.ts)}
+                    Source: <span className="font-medium text-foreground capitalize">{event.source}</span> · {relativeTime(event.ts)}
                   </span>
                 </li>
               ))}
             </ul>
           )}
         </SectionCard>
-      </div>
-
-      {/* Quick actions */}
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        {[
-          {
-            to: "/monitor",
-            label: "Start monitoring",
-            detail: "Webcam through the full AI pipeline",
-            icon: Video,
-          },
-          {
-            to: "/workers",
-            label: "Register a worker",
-            detail: "Faces used for live verification",
-            icon: ScanFace,
-          },
-          {
-            to: "/history",
-            label: "Review incidents",
-            detail: "Filter events and acknowledge alerts",
-            icon: ArrowRight,
-          },
-        ].map((action) => (
-          <Link
-            key={action.to}
-            to={action.to}
-            className="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-accent"
-          >
-            <span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary">
-              <action.icon className="size-4.5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold">{action.label}</span>
-              <span className="block truncate text-xs text-muted-foreground">{action.detail}</span>
-            </span>
-            <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-          </Link>
-        ))}
       </div>
     </div>
   );

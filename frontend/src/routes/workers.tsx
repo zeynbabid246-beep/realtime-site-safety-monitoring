@@ -9,13 +9,14 @@ import {
   ScanFace,
   Search,
   Trash2,
+  Upload,
   UserPlus,
   UserRoundCheck,
   UserRoundX,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { EmptyState, ErrorState, LoadingCard, SectionCard } from "@/components/stat-card";
+import { EmptyState, ErrorState, LoadingCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,10 +34,10 @@ import type { WorkerRecord } from "@/lib/types";
 export const Route = createFileRoute("/workers")({
   head: () => ({
     meta: [
-      { title: "Workers | SentinelOps" },
+      { title: "Workers & Identity | SentinelOps" },
       {
         name: "description",
-        content: "Manage registered workers and their reference face images for live verification.",
+        content: "Manage registered site workers and reference face images for live Siamese model verification.",
       },
     ],
   }),
@@ -71,49 +72,49 @@ function WorkerCard({
   };
 
   return (
-    <article className="panel-rise flex flex-col rounded-lg border bg-card p-4">
+    <article className="panel-rise flex flex-col rounded-lg border bg-card p-4 shadow-sm hover:border-primary/30 transition-all">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary font-bold">
             <ScanFace className="size-5" />
           </span>
           <div className="min-w-0">
-            <h3 className="truncate font-display text-sm font-semibold">
+            <h3 className="truncate font-display text-sm font-semibold text-foreground">
               {worker.name || worker.worker_id}
             </h3>
             <p className="truncate text-xs text-muted-foreground">
-              {worker.role || "Worker"} · <code className="text-[10.5px]">{worker.worker_id}</code>
+              {worker.role || "Site Personnel"} · <code className="text-[10.5px] bg-muted px-1.5 py-0.5 rounded font-mono">{worker.worker_id}</code>
             </p>
           </div>
         </div>
         <StatusBadge tone={worker.active ? "success" : "neutral"}>
-          {worker.active ? "Active" : "Inactive"}
+          {worker.active ? "Active" : "Deactivated"}
         </StatusBadge>
       </div>
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
         <div className="rounded-md bg-muted/60 px-3 py-2">
-          <dt className="flex items-center gap-1.5 text-muted-foreground">
-            <FileImage className="size-3.5" /> Reference faces
+          <dt className="flex items-center gap-1.5 text-muted-foreground font-medium">
+            <FileImage className="size-3.5" /> Reference Faces
           </dt>
-          <dd className="mt-1 font-display text-lg font-bold">{worker.reference_images.length}</dd>
+          <dd className="mt-1 font-display text-lg font-bold text-foreground">{worker.reference_images.length}</dd>
         </div>
         <div className="rounded-md bg-muted/60 px-3 py-2">
-          <dt className="flex items-center gap-1.5 text-muted-foreground">
+          <dt className="flex items-center gap-1.5 text-muted-foreground font-medium">
             <CalendarClock className="size-3.5" /> Registered
           </dt>
-          <dd className="mt-1 font-semibold">{formatTimestamp(worker.created_at)}</dd>
+          <dd className="mt-1 font-semibold text-foreground">{formatTimestamp(worker.created_at)}</dd>
         </div>
       </dl>
 
       {worker.reference_images.length > 0 ? (
         <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <Images className="size-3.5" />
-          stored under data/face_data/input_images/{worker.worker_id}/
+          <Images className="size-3.5 text-primary" />
+          {worker.reference_images.length} frontal crop sample{worker.reference_images.length === 1 ? "" : "s"} enrolled
         </p>
       ) : (
-        <p className="mt-3 rounded-md bg-medium/10 px-2.5 py-1.5 text-[11px] text-medium">
-          No reference faces yet — this worker cannot be verified on camera.
+        <p className="mt-3 rounded-md bg-medium/10 px-2.5 py-1.5 text-[11px] text-medium font-medium">
+          No reference faces enrolled — add photos to enable live webcam identity matching.
         </p>
       )}
 
@@ -133,7 +134,7 @@ function WorkerCard({
           disabled={busy}
           onClick={() => fileInputRef.current?.click()}
         >
-          <Images className="size-3.5" /> Add faces
+          <Upload className="size-3.5" /> Enroll Faces
         </Button>
         <Button
           size="sm"
@@ -228,12 +229,12 @@ function WorkersPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Face recognition"
-        title="Worker management"
-        description="Registered workers are verified live on camera by the Siamese model. Each worker needs 5–10 reference face crops for reliable verification."
+        eyebrow="Identity & Access Management"
+        title="Worker Verification Portal"
+        description="Enrolled worker face crops are matched live on camera using our Siamese neural network backend. Each profile benefits from 5–10 varied lighting face crops."
         actions={
           <Button onClick={() => setRegisterOpen(true)}>
-            <UserPlus className="size-4" /> Register worker
+            <UserPlus className="size-4" /> Register New Worker
           </Button>
         }
       />
@@ -245,23 +246,22 @@ function WorkersPage() {
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by id, name, or role…"
-            className="pl-9"
+            placeholder="Search by ID, name, or role…"
+            className="pl-9 text-xs"
             aria-label="Search workers"
           />
         </div>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-muted-foreground">
           <input
             type="checkbox"
             checked={showInactive}
             onChange={(event) => setShowInactive(event.target.checked)}
             className="size-4 rounded border-input accent-[var(--primary)]"
           />
-          Show deactivated
+          Show deactivated profiles
         </label>
-        <span className="ml-auto text-xs text-muted-foreground">
-          {workers.length} worker{workers.length === 1 ? "" : "s"} ·{" "}
-          {workers.filter((worker) => worker.active).length} active
+        <span className="ml-auto text-xs text-muted-foreground font-medium">
+          {workers.length} enrolled · {workers.filter((worker) => worker.active).length} active on site
         </span>
       </div>
 
@@ -274,22 +274,22 @@ function WorkersPage() {
         </div>
       ) : workersQuery.isError ? (
         <ErrorState
-          message="The face-recognition service is unavailable (TensorFlow or the Siamese model is missing on the server). Worker management requires it."
+          message="The face recognition backend service is unavailable. Verify TensorFlow and model files on the server."
           onRetry={() => void workersQuery.refetch()}
         />
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={ScanFace}
-          title={search ? "No workers match your search" : "No workers registered yet"}
+          title={search ? "No personnel match your search query" : "No registered workers on file"}
           description={
             search
-              ? "Try a different id, name, or role."
-              : "Register your first worker with 5–10 frontal face crops. They will immediately be verified on the live monitor."
+              ? "Try searching by a different name, role, or ID string."
+              : "Register personnel profiles with 5–10 reference face crops to activate real-time identification."
           }
           action={
             search ? undefined : (
               <Button onClick={() => setRegisterOpen(true)}>
-                <UserPlus className="size-4" /> Register worker
+                <UserPlus className="size-4" /> Register Worker Profile
               </Button>
             )
           }
@@ -314,53 +314,51 @@ function WorkersPage() {
       <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Register a worker</DialogTitle>
+            <DialogTitle>Register Worker Profile</DialogTitle>
             <DialogDescription>
-              The worker id becomes the folder{" "}
-              <code className="text-[11px]">data/face_data/input_images/&lt;id&gt;/</code>.
-              Reference faces are saved there and used for live verification.
+              Create a personnel record and upload initial reference face crops for live identification on site feeds.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleRegisterSubmit} className="space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="worker-id">Worker ID *</Label>
+              <Label htmlFor="worker-id">Worker ID / Badge Number *</Label>
               <Input
                 id="worker-id"
                 value={form.workerId}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, workerId: event.target.value }))
                 }
-                placeholder="worker_001"
+                placeholder="e.g. worker_001"
                 autoComplete="off"
                 required
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="worker-name">Full name</Label>
+              <Label htmlFor="worker-name">Full Name</Label>
               <Input
                 id="worker-name"
                 value={form.name}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, name: event.target.value }))
                 }
-                placeholder="Ahmed Ali"
+                placeholder="e.g. Marcus Vance"
                 autoComplete="off"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="worker-role">Role</Label>
+              <Label htmlFor="worker-role">Role / Job Title</Label>
               <Input
                 id="worker-role"
                 value={form.role}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, role: event.target.value }))
                 }
-                placeholder="Crane operator"
+                placeholder="e.g. Heavy Equipment Operator"
                 autoComplete="off"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="worker-faces">Reference face images</Label>
+              <Label htmlFor="worker-faces">Reference Face Crops</Label>
               <Input
                 id="worker-faces"
                 type="file"
@@ -370,14 +368,14 @@ function WorkersPage() {
               />
               <p className="text-[11px] text-muted-foreground">
                 {files.length > 0
-                  ? `${files.length} image${files.length === 1 ? "" : "s"} selected`
-                  : "Optional now — you can add faces later. Frontal crops, varied lighting."}
+                  ? `${files.length} photo${files.length === 1 ? "" : "s"} selected`
+                  : "Upload frontal face crops under clear lighting for high matching confidence."}
               </p>
             </div>
             {formError ? (
               <p
                 role="alert"
-                className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive font-medium"
               >
                 {formError}
               </p>
@@ -393,7 +391,7 @@ function WorkersPage() {
                   </>
                 ) : (
                   <>
-                    <UserPlus className="size-4" /> Register
+                    <UserPlus className="size-4" /> Save Worker Profile
                   </>
                 )}
               </Button>
@@ -411,29 +409,28 @@ function WorkersPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Remove worker</DialogTitle>
+            <DialogTitle>Remove or Deactivate Worker</DialogTitle>
             <DialogDescription>
-              Deactivating keeps the data but the worker will no longer be verified on camera.
-              Purging permanently deletes their reference images.
+              Deactivating retains historical detection records while disabling future identity verification.
             </DialogDescription>
           </DialogHeader>
           {removeTarget ? (
             <div className="space-y-3">
               <div className="rounded-md bg-muted/60 px-3 py-2 text-sm">
-                <p className="font-semibold">{removeTarget.name || removeTarget.worker_id}</p>
+                <p className="font-semibold text-foreground">{removeTarget.name || removeTarget.worker_id}</p>
                 <p className="text-xs text-muted-foreground">
-                  {removeTarget.reference_images.length} reference image
-                  {removeTarget.reference_images.length === 1 ? "" : "s"} stored
+                  {removeTarget.reference_images.length} reference face image
+                  {removeTarget.reference_images.length === 1 ? "" : "s"} enrolled
                 </p>
               </div>
-              <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
                 <input
                   type="checkbox"
                   checked={purge}
                   onChange={(event) => setPurge(event.target.checked)}
                   className="size-4 rounded border-input accent-[var(--destructive)]"
                 />
-                Also delete reference images permanently
+                Permanently delete reference images from disk
               </label>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setRemoveTarget(null)}>
@@ -451,11 +448,11 @@ function WorkersPage() {
                     <Loader2 className="size-4 animate-spin" />
                   ) : purge ? (
                     <>
-                      <UserRoundX className="size-4" /> Purge worker
+                      <UserRoundX className="size-4" /> Purge Worker Profile
                     </>
                   ) : (
                     <>
-                      <UserRoundCheck className="size-4" /> Deactivate
+                      <UserRoundCheck className="size-4" /> Deactivate Worker
                     </>
                   )}
                 </Button>
@@ -465,13 +462,13 @@ function WorkersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Hidden busy indicator for inline image adds */}
+      {/* Uploading indicator */}
       {addImagesMutation.isPending ? (
         <div
-          className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg border bg-card px-4 py-2.5 text-sm shadow-lg"
+          className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg border bg-card px-4 py-2.5 text-sm font-medium shadow-lg"
           role="status"
         >
-          <Loader2 className="size-4 animate-spin text-primary" /> Uploading reference faces…
+          <Loader2 className="size-4 animate-spin text-primary" /> Enrolling new reference face images…
         </div>
       ) : null}
     </div>

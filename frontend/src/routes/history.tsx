@@ -2,12 +2,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
+  BellRing,
   BellOff,
   CheckCheck,
   Cpu,
   FileImage,
   History as HistoryIcon,
+  Play,
   Search,
+  ShieldAlert,
   Video,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -27,6 +30,7 @@ import {
   acknowledgeAlert,
   evidenceUrl,
   formatEventTime,
+  getApiBase,
   listAlerts,
   listEvents,
   relativeTime,
@@ -37,10 +41,10 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/history")({
   head: () => ({
     meta: [
-      { title: "History | SentinelOps" },
+      { title: "History & Alerts | SentinelOps" },
       {
         name: "description",
-        content: "Detection history and safety incidents with risk, source, and status filters.",
+        content: "Safety incident history and real-time alert log with risk, source, and text search filters.",
       },
     ],
   }),
@@ -57,6 +61,7 @@ function HistoryPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "new" | "acknowledged">("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
+  const [ackAllSuccess, setAckAllSuccess] = useState(false);
   const PAGE_SIZE = 15;
 
   const eventsQuery = useQuery({
@@ -75,6 +80,23 @@ function HistoryPage() {
   const ackMutation = useMutation({
     mutationFn: acknowledgeAlert,
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      void queryClient.invalidateQueries({ queryKey: ["report"] });
+    },
+  });
+
+  /* Bulk Acknowledge All Alerts */
+  const ackAllMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`${getApiBase()}/api/alerts/ack-all`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error(`Bulk acknowledge failed: ${response.statusText}`);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      setAckAllSuccess(true);
+      setTimeout(() => setAckAllSuccess(false), 3000);
       void queryClient.invalidateQueries({ queryKey: ["alerts"] });
       void queryClient.invalidateQueries({ queryKey: ["report"] });
     },
@@ -121,46 +143,64 @@ function HistoryPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Monitoring history"
-        title="Events & incidents"
-        description="Every recorded safety event and alert, with filters by risk level, source, and acknowledgement status."
+        eyebrow="Monitoring Logs & Alerts"
+        title="Incident History & Real-time Alerts"
+        description="Comprehensive audit log of detected hazard frames, PPE violations, danger zone breaches, and active safety alerts."
+        actions={
+          unacknowledged > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={ackAllMutation.isPending}
+              onClick={() => ackAllMutation.mutate()}
+            >
+              <BellRing className="size-4 text-safe" /> Acknowledge All ({unacknowledged})
+            </Button>
+          ) : undefined
+        }
       />
 
-      {/* Summary */}
+      {/* Summary Stat Cards */}
       <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
-          label="Events loaded"
+          label="Total Events Loaded"
           value={filteredEvents.length}
-          detail={`${events.length} total in store`}
+          detail={`${events.length} stored in database`}
           icon={HistoryIcon}
         />
         <StatCard
-          label="Critical events"
+          label="Critical Severity Events"
           value={criticalCount}
-          detail="In current filter"
+          detail="Within current filter selection"
           icon={Cpu}
           tone={criticalCount ? "danger" : "success"}
         />
         <StatCard
-          label="PPE violations"
+          label="PPE Non-Compliance"
           value={ppeCount}
-          detail="Cumulative in view"
+          detail="Cumulative violations in view"
           icon={Video}
           tone={ppeCount ? "warning" : "success"}
         />
         <StatCard
-          label="Open alerts"
+          label="Unacknowledged Alerts"
           value={unacknowledged}
-          detail="Awaiting acknowledgement"
+          detail="High / Critical events awaiting review"
           icon={BellOff}
           tone={unacknowledged ? "warning" : "success"}
         />
       </div>
 
+      {ackAllSuccess && (
+        <div className="mb-4 p-3 rounded-md bg-safe/10 border border-safe/30 text-xs font-semibold text-safe flex items-center gap-2">
+          <CheckCheck className="size-4" /> All active alerts have been acknowledged successfully.
+        </div>
+      )}
+
       {/* Alerts feed */}
       <SectionCard
-        title="Safety alerts"
-        description="HIGH / CRITICAL events pushed to the alert channel"
+        title="Safety Alerts Log"
+        description="Pushed when HIGH or CRITICAL hazard threshold is exceeded"
         className="mb-4"
         action={
           <div className="flex gap-1 rounded-md border p-0.5">
@@ -189,7 +229,7 @@ function HistoryPage() {
         ) : alerts.length === 0 ? (
           <EmptyState
             icon={CheckCheck}
-            title="No alerts"
+            title="No alerts match the filter"
             description="HIGH and CRITICAL safety events will appear here as the pipeline detects them."
             className="border-0 py-6"
           />
@@ -198,11 +238,11 @@ function HistoryPage() {
             {alerts.slice(0, 8).map((alert) => (
               <li
                 key={alert.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2.5"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2.5 bg-card"
               >
                 <RiskBadge level={alert.level as RiskLevel} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{alert.title}</p>
+                  <p className="truncate text-sm font-semibold text-foreground">{alert.title}</p>
                   <p className="truncate text-xs text-muted-foreground">{alert.message}</p>
                 </div>
                 <span
@@ -229,10 +269,10 @@ function HistoryPage() {
         )}
       </SectionCard>
 
-      {/* Filters */}
+      {/* Event Log Table */}
       <SectionCard
-        title="Event log"
-        description="Frames that produced recorded safety events"
+        title="Detection Event Log"
+        description="Historical stream frames recorded with safety metrics and evidence"
         action={
           <div className="relative w-44 sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -242,7 +282,7 @@ function HistoryPage() {
                 setSearch(event.target.value);
                 setPage(0);
               }}
-              placeholder="Search violations…"
+              placeholder="Search violations or sources…"
               className="h-8 pl-9 text-xs"
               aria-label="Search events"
             />
@@ -250,7 +290,7 @@ function HistoryPage() {
         }
       >
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-muted-foreground">Risk:</span>
+          <span className="text-xs font-semibold text-muted-foreground">Severity:</span>
           {(["all", ...RISK_LEVELS] as const).map((level) => (
             <button
               key={level}
@@ -300,8 +340,8 @@ function HistoryPage() {
         ) : pagedEvents.length === 0 ? (
           <EmptyState
             icon={HistoryIcon}
-            title="No events match the filters"
-            description="Try clearing the search or widening the risk/source filters. Events appear here once the pipeline records them."
+            title="No events match search or filter"
+            description="Try clearing search or widening filters. Events appear here once the detection engine processes frames."
           />
         ) : (
           <>
@@ -309,25 +349,25 @@ function HistoryPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-28">Time</TableHead>
+                    <TableHead className="w-32">Timestamp</TableHead>
                     <TableHead className="w-24">Risk</TableHead>
                     <TableHead className="w-20">Source</TableHead>
                     <TableHead className="w-16 text-right">Persons</TableHead>
-                    <TableHead>Violations</TableHead>
-                    <TableHead className="w-20 text-right">Evidence</TableHead>
+                    <TableHead>Violations & Hazards</TableHead>
+                    <TableHead className="w-24 text-right">Evidence</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pagedEvents.map((event) => (
                     <TableRow key={event.id}>
-                      <TableCell className="whitespace-nowrap text-xs">
+                      <TableCell className="whitespace-nowrap text-xs font-medium">
                         {formatEventTime(event.ts)}
                       </TableCell>
                       <TableCell>
                         <RiskBadge level={event.risk_level} size="sm" />
                       </TableCell>
-                      <TableCell className="text-xs capitalize">{event.source}</TableCell>
-                      <TableCell className="text-right text-xs">{event.persons}</TableCell>
+                      <TableCell className="text-xs capitalize font-medium">{event.source}</TableCell>
+                      <TableCell className="text-right text-xs font-semibold">{event.persons}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {Object.entries(event.violation_counts)
@@ -341,23 +381,40 @@ function HistoryPage() {
                               </span>
                             ))}
                           {Object.keys(event.violation_counts).length === 0 ? (
-                            <span className="text-xs text-muted-foreground">—</span>
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <ShieldAlert className="size-3 text-safe" /> Normal Frame
+                            </span>
                           ) : null}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        {event.evidence_image ? (
-                          <a
-                            href={evidenceUrl(event.evidence_image) ?? "#"}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                          >
-                            <FileImage className="size-3.5" /> View
-                          </a>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        <div className="flex justify-end gap-2">
+                          {event.evidence_image && (
+                            <a
+                              href={evidenceUrl(event.evidence_image) ?? "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                              title="View snapshot image"
+                            >
+                              <FileImage className="size-3.5" /> Image
+                            </a>
+                          )}
+                          {event.evidence_clip && (
+                            <a
+                              href={evidenceUrl(event.evidence_clip) ?? "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                              title="Play recorded clip"
+                            >
+                              <Play className="size-3.5" /> Clip
+                            </a>
+                          )}
+                          {!event.evidence_image && !event.evidence_clip && (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -369,9 +426,9 @@ function HistoryPage() {
             {pageCount > 1 ? (
               <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                 <span>
-                  {safePage * PAGE_SIZE + 1}–
+                  Showing {safePage * PAGE_SIZE + 1}–
                   {Math.min((safePage + 1) * PAGE_SIZE, filteredEvents.length)} of{" "}
-                  {filteredEvents.length}
+                  {filteredEvents.length} events
                 </span>
                 <div className="flex gap-2">
                   <Button
@@ -398,11 +455,10 @@ function HistoryPage() {
       </SectionCard>
 
       <p className="mt-4 text-xs text-muted-foreground">
-        Need aggregates and exports? See the{" "}
+        Export full dataset as CSV or JSON on the{" "}
         <Link to="/reports" className="font-semibold text-primary hover:underline">
-          Reports
-        </Link>{" "}
-        page.
+          Reports page
+        </Link>.
       </p>
     </div>
   );
